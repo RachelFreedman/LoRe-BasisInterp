@@ -37,12 +37,23 @@ HYPERPARAMETERS (documented so the script is self-explanatory)
   data split   fixed by prepare.py at seed=123. Do NOT change it -- it keeps the
                train/test user split identical for everyone on the team.
 
-  basis_fp     = ||V||_F, the Frobenius norm of the learned basis matrix. It is
+  bases_kept   how many of the K basis functions survive pruning: a basis is
+               dropped if EVERY user gives it <1% weight (softmax(W) max < 1e-2,
+               see utils.py). This is informational -- the model often collapses
+               onto fewer "effective" bases than K. It can differ between
+               seeds/machines, which is exactly why it must NOT be the thing you
+               compare.
+
+  basis_fp     = ||V||_F over the FULL [4096, K] basis matrix (ALL K columns,
+               BEFORE pruning) -- so it includes sub-threshold bases and is
+               comparable across teammates even when bases_kept differs. It is
                invariant to column permutation and sign, so it survives the
                harmless reordering of bases between runs while still flagging a
                genuinely different fit. Same GPU + same seed -> matches tightly;
                different GPUs -> agree to ~3-4 decimals (CUDA float
-               nondeterminism), NOT bitwise. So compare approximately.
+               nondeterminism), NOT bitwise. So compare approximately. The full
+               matrices themselves are also saved (see OUTPUT) for direct
+               inspection.
 
 PREREQUISITE (one-time, slow): the cached embeddings must already exist at
     data/prism/train_embeddings.pkl
@@ -51,9 +62,14 @@ produced by:  python prepare.py  &&  python generate-prism-embeddings.py
 
 OUTPUT
 ------
-Prints a summary table for each part AND writes every row to a CSV (default
-basis_reproducibility_results.csv, which is gitignored). Copy that CSV to your
-local machine to share / diff against teammates.
+Prints a summary table for each part AND writes:
+  - basis_reproducibility_results.csv : the summary rows (gitignored)
+  - basis_matrices.pt                 : the FULL [4096, K] basis matrix for every
+                                        run, keyed by run (e.g. PART2_K10_seed42),
+                                        so you can load and compare the actual
+                                        basis vectors -- including sub-threshold
+                                        ones -- not just the scalar fingerprint.
+Both are gitignored; copy them to your local machine to share / compare.
 
 USAGE (run from inside the PRISM/ directory)
 --------------------------------------------
@@ -76,7 +92,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # Make utils.py importable (same trick train_basis.py uses)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils import solve_regularized_simplex  # noqa: E402
+from utils import LoRe_regularized  # noqa: E402
 
 
 def set_seed(s):
@@ -135,25 +151,35 @@ def accuracy(W, V, features):
 
 
 def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
-    """Train one basis set under a given (K, seed) and return a result row."""
+    """Train one basis set under a given (K, seed). Returns (row, V_full) where
+    V_full is the FULL [4096, K] basis matrix BEFORE pruning -- that full matrix
+    is the thing teammates should compare, since pruning can keep a different
+    number of columns on different machines/seeds."""
     print("\n" + "=" * 64)
     print(f"[{part}] {label}  (K={K}, seed={seed}, alpha={args.alpha}, "
           f"iters={args.iters}, lr={args.lr})")
     print("=" * 64)
     set_seed(seed)  # lock RNG BEFORE the solve so the basis init is reproducible
-    W, V = solve_regularized_simplex(
-        V_final, args.alpha, train_seen, K,
-        num_iterations=args.iters, learning_rate=args.lr,
-    )
-    train_acc, _ = accuracy(W, V, train_seen)
-    test_acc, test_std = accuracy(W, V, test_seen)
-    return {
+    # Build the solver directly (instead of solve_regularized_simplex) so we can
+    # grab the FULL basis matrix am.V (all K columns). solve_regularized_simplex
+    # would only hand back the pruned columns, hiding the sub-threshold bases.
+    am = LoRe_regularized(V_final, args.alpha, len(train_seen), 4096, K,
+                          args.iters, args.lr)
+    W_kept, V_kept = am.train(train_seen)   # pruned: what downstream eval uses
+    V_full = am.V.detach()                  # [4096, K] -- every basis column
+
+    # Accuracy uses the pruned (canonical) bases; the dropped near-zero-weight
+    # columns add ~nothing, so this matches the repo's reported metric.
+    train_acc, _ = accuracy(W_kept, V_kept, train_seen)
+    test_acc, test_std = accuracy(W_kept, V_kept, test_seen)
+    row = {
         "part": part, "run": label, "K": K, "seed": seed,
         "alpha": args.alpha, "iters": args.iters, "lr": args.lr,
-        "bases_kept": V.shape[1],                     # bases surviving pruning
-        "basis_fp": float(torch.linalg.norm(V).item()),  # ||V||_F fingerprint
+        "bases_kept": V_kept.shape[1],                        # survived pruning (info)
+        "basis_fp": float(torch.linalg.norm(V_full).item()),  # ||V||_F over ALL K cols
         "train_acc": train_acc, "test_acc": test_acc, "test_std": test_std,
     }
+    return row, V_full.cpu()
 
 
 def print_table(title, rows):
@@ -193,6 +219,10 @@ def parse_args():
     p.add_argument("--lr", type=float, default=0.5, help="learning rate")
     p.add_argument("--out", default="basis_reproducibility_results.csv",
                    help="CSV path for results (gitignored; copy to your machine when done)")
+    p.add_argument("--matrices-out", default="basis_matrices.pt",
+                   help="path to save the FULL [4096,K] basis matrix per run "
+                        "(gitignored; copy down to inspect/compare ALL bases, "
+                        "including sub-threshold ones)")
     return p.parse_args()
 
 
@@ -212,15 +242,22 @@ def main():
     print("Loading backbone once for reference direction (V_sft)...")
     V_final = get_reference_direction()
 
+    part1, part2 = [], []
+    matrices = {}  # run-key -> full [4096, K] basis matrix, saved for inspection
+
     # ---- PART 1: rank sweep (vary K, fixed seed) -- bases differ by design ----
-    part1 = [run_one("PART1-rank", f"K={K}", K, args.rank_seed,
-                     V_final, train_seen, test_seen, args)
-             for K in args.rank_values]
+    for K in args.rank_values:
+        row, V_full = run_one("PART1-rank", f"K={K}", K, args.rank_seed,
+                              V_final, train_seen, test_seen, args)
+        part1.append(row)
+        matrices[f"PART1_K{K}_seed{args.rank_seed}"] = V_full
 
     # ---- PART 2: seed variance / team reproducibility (fixed K, vary seed) ----
-    part2 = [run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
-                     V_final, train_seen, test_seen, args)
-             for s in args.seed_values]
+    for s in args.seed_values:
+        row, V_full = run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
+                              V_final, train_seen, test_seen, args)
+        part2.append(row)
+        matrices[f"PART2_K{args.fixed_K}_seed{s}"] = V_full
 
     print_table(
         f"PART 1  RANK SWEEP  (seed fixed at {args.rank_seed}; bases differ between rows by design)",
@@ -228,6 +265,12 @@ def main():
     print_table(
         f"PART 2  SEED VARIANCE  (K fixed at {args.fixed_K}; compare the seed=42 row to teammates)",
         part2)
+
+    # ---- save the FULL basis matrices (all K columns, pre-pruning) ----
+    torch.save(matrices, args.matrices_out)
+    print(f"\nSaved {len(matrices)} full basis matrices (each [4096, K], "
+          f"pre-pruning) to {args.matrices_out}")
+    print("  load with: torch.load('basis_matrices.pt') -> dict[run_key] = V[4096,K]")
 
     # ---- write combined CSV (gitignored; copy to your machine to share) ----
     fields = ["part", "run", "K", "seed", "alpha", "iters", "lr",

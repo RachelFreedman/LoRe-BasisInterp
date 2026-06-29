@@ -3,3 +3,4 @@ PRISM/data/prism/*.pkl
 
 # Generated experiment results (copy down manually; regenerated per run)
 PRISM/basis_reproducibility_results.csv
+PRISM/basis_matrices.pt
