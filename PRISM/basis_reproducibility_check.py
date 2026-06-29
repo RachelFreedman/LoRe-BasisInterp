@@ -1,30 +1,66 @@
 #!/usr/bin/env python3
 """
-LoRe-PRISM basis reproducibility sanity check.
+LoRe-PRISM basis reproducibility sanity check (two-part).
 
-Runs the PRISM basis-learning experiment several times, varying ONE
-hyperparameter, then prints a summary table. The point is a SANITY CHECK:
-teammates run the same command and confirm they all land on the same learned
-basis functions (compare the basis_fp fingerprint column) and the same
-accuracies. Fully argument-driven so it is a single shareable command -- no
-code edits needed to switch what is swept.
+PURPOSE
+-------
+Confirm that everyone on the team learns the SAME basis reward functions from
+the PRISM preference data. Each teammate runs this script and compares the
+`basis_fp` column for the agreed configuration.
 
-Note on basis_fp: it is the Frobenius norm ||V||_F of the learned basis matrix.
-It is invariant to column permutation/sign, so it survives the harmless
-reordering of bases across runs while still flagging a genuinely different fit.
-Expect close-but-not-bitwise-identical values across different GPUs (CUDA
-nondeterminism); same machine + same seed should match tightly.
+The script runs TWO parts in a single invocation:
 
-Prerequisite (one-time, slow): the cached embeddings must already exist:
+  PART 1 - RANK SWEEP  (vary K, hold the seed fixed)
+      Sweeps the number of basis functions K (the rank of V). Shows how
+      generalization accuracy changes with rank. Each row uses a different K,
+      so the learned bases are EXPECTED to differ between rows -- this part is
+      about the rank/accuracy trade-off, not about matching teammates.
+
+  PART 2 - SEED VARIANCE / TEAM REPRODUCIBILITY  (hold K fixed, vary the seed)
+      The original LoRe code does NOT lock the random seed, so the basis
+      initialization -- and therefore the learned bases -- randomizes on every
+      run. We lock it here (see set_seed). Seeds 0,1,2 measure how much the
+      seed actually moves the result; seed 42 is the TEAM-AGREED value. Compare
+      your seed=42 row's basis_fp against your teammates' seed=42 row to confirm
+      you all converge to the same bases.
+
+HYPERPARAMETERS (documented so the script is self-explanatory)
+--------------------------------------------------------------
+  K            number of basis functions = rank of the basis matrix V. The
+               central LoRe knob. (PART 1 sweeps it; PART 2 fixes it.)
+  seed         RNG seed controlling basis initialization during training. MUST
+               match across teammates to reproduce the same bases. Team value = 42.
+  alpha        strength of regularization pulling the bases toward the backbone's
+               single SFT reward direction (V_sft). Default 1e4 (repo default).
+  iters        optimization steps for the alternating W / V solve. Default 20000.
+  lr           learning rate for that solve. Default 0.5.
+  data split   fixed by prepare.py at seed=123. Do NOT change it -- it keeps the
+               train/test user split identical for everyone on the team.
+
+  basis_fp     = ||V||_F, the Frobenius norm of the learned basis matrix. It is
+               invariant to column permutation and sign, so it survives the
+               harmless reordering of bases between runs while still flagging a
+               genuinely different fit. Same GPU + same seed -> matches tightly;
+               different GPUs -> agree to ~3-4 decimals (CUDA float
+               nondeterminism), NOT bitwise. So compare approximately.
+
+PREREQUISITE (one-time, slow): the cached embeddings must already exist at
     data/prism/train_embeddings.pkl
     data/prism/test_embeddings.pkl
 produced by:  python prepare.py  &&  python generate-prism-embeddings.py
 
-Examples (run from inside the PRISM/ directory):
-    python basis_reproducibility_check.py                   # vary K over 5,10,20 (seed 0)
-    python basis_reproducibility_check.py --vary seed       # vary seed over 0,1,2 (K=10)
-    python basis_reproducibility_check.py --vary K --values 1,5,20,50
-    python basis_reproducibility_check.py --vary seed --values 0,1,2,3,4 --fixed-K 5
+OUTPUT
+------
+Prints a summary table for each part AND writes every row to a CSV (default
+basis_reproducibility_results.csv, which is gitignored). Copy that CSV to your
+local machine to share / diff against teammates.
+
+USAGE (run from inside the PRISM/ directory)
+--------------------------------------------
+    python basis_reproducibility_check.py
+    python basis_reproducibility_check.py --rank-values 1,5,10,20,50
+    python basis_reproducibility_check.py --seed-values 0,1,2,42 --fixed-K 10
+    python basis_reproducibility_check.py --out my_results.csv
 """
 import os
 import sys
@@ -43,17 +79,10 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils import solve_regularized_simplex  # noqa: E402
 
 
-def build_runs(args):
-    """Turn CLI args into a list of run configs, sweeping exactly one knob."""
-    if args.vary == "K":
-        values = args.values if args.values is not None else [5, 10, 20]
-        return [{"label": f"K={v}", "K": int(v), "seed": args.fixed_seed} for v in values]
-    else:  # vary == "seed"
-        values = args.values if args.values is not None else [0, 1, 2]
-        return [{"label": f"seed={v}", "K": args.fixed_K, "seed": int(v)} for v in values]
-
-
 def set_seed(s):
+    """Lock every RNG so basis initialization (and the learned bases) is
+    deterministic. This is the fix for LoRe's default non-seeded training that
+    the team agreed on -- without it the bases randomize on every run."""
     random.seed(s)
     np.random.seed(s)
     torch.manual_seed(s)
@@ -105,80 +134,115 @@ def accuracy(W, V, features):
     return float(np.mean(accs)), float(np.std(accs))
 
 
+def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
+    """Train one basis set under a given (K, seed) and return a result row."""
+    print("\n" + "=" * 64)
+    print(f"[{part}] {label}  (K={K}, seed={seed}, alpha={args.alpha}, "
+          f"iters={args.iters}, lr={args.lr})")
+    print("=" * 64)
+    set_seed(seed)  # lock RNG BEFORE the solve so the basis init is reproducible
+    W, V = solve_regularized_simplex(
+        V_final, args.alpha, train_seen, K,
+        num_iterations=args.iters, learning_rate=args.lr,
+    )
+    train_acc, _ = accuracy(W, V, train_seen)
+    test_acc, test_std = accuracy(W, V, test_seen)
+    return {
+        "part": part, "run": label, "K": K, "seed": seed,
+        "alpha": args.alpha, "iters": args.iters, "lr": args.lr,
+        "bases_kept": V.shape[1],                     # bases surviving pruning
+        "basis_fp": float(torch.linalg.norm(V).item()),  # ||V||_F fingerprint
+        "train_acc": train_acc, "test_acc": test_acc, "test_std": test_std,
+    }
+
+
+def print_table(title, rows):
+    print("\n\n" + "#" * 80)
+    print(f"# {title}")
+    print("#" * 80)
+    header = (f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | "
+              f"{'basis_fp':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}")
+    print(header)
+    print("-" * len(header))
+    for r in rows:
+        print(f"{r['run']:>9} | {r['K']:>3} | {r['seed']:>4} | {r['bases_kept']:>10} | "
+              f"{r['basis_fp']:>10.4f} | {r['train_acc']:>9.4f} | "
+              f"{r['test_acc']:>9.4f} | {r['test_std']:>8.4f}")
+
+
 def parse_args():
-    p = argparse.ArgumentParser(description="Run the LoRe-PRISM experiment, sweeping one knob.")
-    p.add_argument("--vary", choices=["K", "seed"], default="K",
-                   help="which hyperparameter to sweep (default: K)")
-    p.add_argument("--values", type=lambda s: [x.strip() for x in s.split(",")], default=None,
-                   help="comma-separated values for the swept knob (e.g. 5,10,20)")
+    p = argparse.ArgumentParser(
+        description="Two-part LoRe-PRISM basis reproducibility check.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    # PART 1 -- rank sweep
+    p.add_argument("--rank-values", type=lambda s: [int(x) for x in s.split(",")],
+                   default=[5, 10, 20],
+                   help="PART 1: comma-separated K values to sweep (seed held fixed)")
+    p.add_argument("--rank-seed", type=int, default=42,
+                   help="PART 1: seed held fixed while sweeping K")
+    # PART 2 -- seed variance / team reproducibility
+    p.add_argument("--seed-values", type=lambda s: [int(x) for x in s.split(",")],
+                   default=[0, 1, 2, 42],
+                   help="PART 2: comma-separated seeds to sweep (42 = team-agreed value)")
     p.add_argument("--fixed-K", type=int, default=10,
-                   help="K to hold fixed when --vary seed (default: 10)")
-    p.add_argument("--fixed-seed", type=int, default=0,
-                   help="seed to hold fixed when --vary K (default: 0)")
-    p.add_argument("--alpha", type=float, default=1e4, help="regularization strength (default: 1e4)")
-    p.add_argument("--iters", type=int, default=20000, help="optimization steps (default: 20000)")
-    p.add_argument("--lr", type=float, default=0.5, help="learning rate (default: 0.5)")
+                   help="PART 2: K held fixed while sweeping the seed")
+    # shared hyperparameters (documented in the module docstring)
+    p.add_argument("--alpha", type=float, default=1e4, help="regularization strength")
+    p.add_argument("--iters", type=int, default=20000, help="optimization steps")
+    p.add_argument("--lr", type=float, default=0.5, help="learning rate")
     p.add_argument("--out", default="basis_reproducibility_results.csv",
-                   help="path to write the summary CSV (default: basis_reproducibility_results.csv)")
+                   help="CSV path for results (gitignored; copy to your machine when done)")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-    runs = build_runs(args)
 
     print(f"Device: {device}")
-    print(f"Sweep: vary {args.vary} over {[r[args.vary] for r in runs]} "
-          f"| alpha={args.alpha} iters={args.iters} lr={args.lr}")
+    print(f"Hyperparameters: alpha={args.alpha} iters={args.iters} lr={args.lr} "
+          f"(data split fixed by prepare.py seed=123)")
     print("Loading cached embeddings...")
     train_emb = torch.load("data/prism/train_embeddings.pkl")
     test_emb = torch.load("data/prism/test_embeddings.pkl")
-
     train_seen = group_embeddings_by_user(train_emb, seen_value=True, split_name="train")
     test_seen = group_embeddings_by_user(test_emb, seen_value=True, split_name="test")
-    N = len(train_seen)
-    print(f"Seen users: {N}")
+    print(f"Seen users: {len(train_seen)}")
 
     print("Loading backbone once for reference direction (V_sft)...")
     V_final = get_reference_direction()
 
-    results = []
-    for cfg in runs:
-        print("\n" + "=" * 64)
-        print(f"RUN {cfg['label']}  (K={cfg['K']}, seed={cfg['seed']}, alpha={args.alpha}, iters={args.iters})")
-        print("=" * 64)
-        set_seed(cfg["seed"])
-        W, V = solve_regularized_simplex(
-            V_final, args.alpha, train_seen, cfg["K"],
-            num_iterations=args.iters, learning_rate=args.lr,
-        )
-        train_acc, _ = accuracy(W, V, train_seen)
-        test_acc, test_std = accuracy(W, V, test_seen)
-        kept = V.shape[1]  # bases surviving the pruning step
-        basis_fp = float(torch.linalg.norm(V).item())  # ||V||_F fingerprint
-        results.append((cfg["label"], cfg["K"], cfg["seed"], kept, basis_fp, train_acc, test_acc, test_std))
+    # ---- PART 1: rank sweep (vary K, fixed seed) -- bases differ by design ----
+    part1 = [run_one("PART1-rank", f"K={K}", K, args.rank_seed,
+                     V_final, train_seen, test_seen, args)
+             for K in args.rank_values]
 
-    print("\n\n" + "#" * 64)
-    print("# SUMMARY  (test = seen users, UNSEEN prompts -- the generalization metric)")
-    print("#" * 64)
-    header = (f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | "
-              f"{'basis_fp':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}")
-    print(header)
-    print("-" * len(header))
-    for label, K, seed, kept, fp, tr, te, std in results:
-        print(f"{label:>9} | {K:>3} | {seed:>4} | {kept:>10} | "
-              f"{fp:>10.4f} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
-    print("\nbasis_fp = ||V||_F (permutation/sign-invariant). Same machine + seed "
-          "should match tightly; teammates compare this to confirm the same bases.")
+    # ---- PART 2: seed variance / team reproducibility (fixed K, vary seed) ----
+    part2 = [run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
+                     V_final, train_seen, test_seen, args)
+             for s in args.seed_values]
 
+    print_table(
+        f"PART 1  RANK SWEEP  (seed fixed at {args.rank_seed}; bases differ between rows by design)",
+        part1)
+    print_table(
+        f"PART 2  SEED VARIANCE  (K fixed at {args.fixed_K}; compare the seed=42 row to teammates)",
+        part2)
+
+    # ---- write combined CSV (gitignored; copy to your machine to share) ----
+    fields = ["part", "run", "K", "seed", "alpha", "iters", "lr",
+              "bases_kept", "basis_fp", "train_acc", "test_acc", "test_std"]
     with open(args.out, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["run", "K", "seed", "bases_kept", "basis_fp",
-                         "train_acc", "test_acc", "test_std"])
-        for label, K, seed, kept, fp, tr, te, std in results:
-            writer.writerow([label, K, seed, kept,
-                             f"{fp:.4f}", f"{tr:.4f}", f"{te:.4f}", f"{std:.4f}"])
-    print(f"\nWrote results to {args.out}")
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        for r in part1 + part2:
+            row = dict(r)
+            for k in ("basis_fp", "train_acc", "test_acc", "test_std"):
+                row[k] = f"{row[k]:.4f}"
+            writer.writerow(row)
+    print(f"\nWrote {len(part1) + len(part2)} rows to {args.out}")
+    print("basis_fp = ||V||_F (permutation/sign-invariant). Compare the PART 2 "
+          "seed=42 row against teammates to confirm matching bases.")
 
 
 if __name__ == "__main__":
