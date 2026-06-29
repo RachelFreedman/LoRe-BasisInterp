@@ -66,6 +66,12 @@ Prints a summary table for each part, THEN a PER-CONFIG BASIS DETAIL section
 (one fingerprint row per individual basis vector -- screenshot this to share),
 AND writes:
   - basis_reproducibility_results.csv : the summary rows (gitignored)
+  - basis_detail.csv                  : the eyeball view -- one row PER BASIS
+                                        vector per run (norm, cos to V_sft,
+                                        checksum, max user weight, kept). Same
+                                        numbers as the BASIS DETAIL tables, so
+                                        you can diff/sort in a spreadsheet instead
+                                        of squinting at a screenshot (gitignored).
   - basis_matrices.pt                 : a self-contained dict per run, keyed by run
                                         (e.g. PART2_K10_seed42). Each entry holds
                                         the FULL [4096, K] basis matrix V, the full
@@ -247,9 +253,16 @@ def print_basis_detail(key, m, vsft):
               f"{'checksum':>13} | {'max_user_wt':>11} | {'kept':>4}")
     print(header)
     print("-" * len(header))
+    detail_rows = []
     for idx, (norm, cos, checksum, max_wt, kept) in enumerate(rows):
         print(f"{idx:>5} | {norm:>12.5f} | {cos:>11.5f} | {checksum:>13.5f} | "
               f"{max_wt:>11.5f} | {'yes' if kept else 'no':>4}")
+        detail_rows.append({
+            "run_key": key, "part": m["part"], "K": K, "seed": m["seed"],
+            "basis": idx, "norm": norm, "cos_vsft": cos, "checksum": checksum,
+            "max_user_wt": max_wt, "kept": "yes" if kept else "no",
+        })
+    return detail_rows
 
 
 def parse_args():
@@ -279,6 +292,10 @@ def parse_args():
                    help="path to save the FULL [4096,K] basis matrix per run "
                         "(gitignored; copy down to inspect/compare ALL bases, "
                         "including sub-threshold ones)")
+    p.add_argument("--detail-out", default="basis_detail.csv",
+                   help="CSV path for the per-basis eyeball view (one row per "
+                        "basis vector: norm, cos to V_sft, checksum, max user "
+                        "weight, kept; gitignored; copy down to share/compare)")
     return p.parse_args()
 
 
@@ -337,8 +354,9 @@ def main():
     print("# Same fit -> same set of rows up to ordering. Raw vectors in the .pt file.")
     print("#" * 80)
     vsft_cpu = V_final.detach().cpu()
+    detail_all = []
     for key in order:
-        print_basis_detail(key, matrices[key], vsft_cpu)
+        detail_all.extend(print_basis_detail(key, matrices[key], vsft_cpu))
 
     # ---- save the FULL basis matrices + weights + metadata per run ----
     torch.save(matrices, args.matrices_out)
@@ -359,6 +377,20 @@ def main():
                 row[k] = f"{row[k]:.4f}"
             writer.writerow(row)
     print(f"\nWrote {len(part1) + len(part2)} rows to {args.out}")
+
+    # ---- write per-basis detail CSV (the eyeball view, one row per basis) ----
+    detail_fields = ["run_key", "part", "K", "seed", "basis",
+                     "norm", "cos_vsft", "checksum", "max_user_wt", "kept"]
+    with open(args.detail_out, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=detail_fields)
+        writer.writeheader()
+        for r in detail_all:
+            row = dict(r)
+            for k in ("norm", "cos_vsft", "checksum", "max_user_wt"):
+                row[k] = f"{row[k]:.5f}"
+            writer.writerow(row)
+    print(f"Wrote {len(detail_all)} per-basis rows to {args.detail_out} "
+          "(same fingerprints as the BASIS DETAIL tables above)")
     print("basis_fp = ||V||_F (permutation/sign-invariant). Compare the PART 2 "
           "seed=42 row against teammates to confirm matching bases.")
 
