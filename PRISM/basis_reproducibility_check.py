@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """
-Quick LoRe-PRISM experiment runner.
+LoRe-PRISM basis reproducibility sanity check.
 
 Runs the PRISM basis-learning experiment several times, varying ONE
-hyperparameter, then prints a summary table. Fully argument-driven so it is a
-single shareable command -- no code edits needed to switch what is swept.
+hyperparameter, then prints a summary table. The point is a SANITY CHECK:
+teammates run the same command and confirm they all land on the same learned
+basis functions (compare the basis_fp fingerprint column) and the same
+accuracies. Fully argument-driven so it is a single shareable command -- no
+code edits needed to switch what is swept.
+
+Note on basis_fp: it is the Frobenius norm ||V||_F of the learned basis matrix.
+It is invariant to column permutation/sign, so it survives the harmless
+reordering of bases across runs while still flagging a genuinely different fit.
+Expect close-but-not-bitwise-identical values across different GPUs (CUDA
+nondeterminism); same machine + same seed should match tightly.
 
 Prerequisite (one-time, slow): the cached embeddings must already exist:
     data/prism/train_embeddings.pkl
@@ -12,10 +21,10 @@ Prerequisite (one-time, slow): the cached embeddings must already exist:
 produced by:  python prepare.py  &&  python generate-prism-embeddings.py
 
 Examples (run from inside the PRISM/ directory):
-    python run_experiment.py                       # vary K over 5,10,20 (seed 0)
-    python run_experiment.py --vary seed           # vary seed over 0,1,2 (K=10)
-    python run_experiment.py --vary K --values 1,5,20,50
-    python run_experiment.py --vary seed --values 0,1,2,3,4 --fixed-K 5
+    python basis_reproducibility_check.py                   # vary K over 5,10,20 (seed 0)
+    python basis_reproducibility_check.py --vary seed       # vary seed over 0,1,2 (K=10)
+    python basis_reproducibility_check.py --vary K --values 1,5,20,50
+    python basis_reproducibility_check.py --vary seed --values 0,1,2,3,4 --fixed-K 5
 """
 import os
 import sys
@@ -143,16 +152,21 @@ def main():
         train_acc, _ = accuracy(W, V, train_seen)
         test_acc, test_std = accuracy(W, V, test_seen)
         kept = V.shape[1]  # bases surviving the pruning step
-        results.append((cfg["label"], cfg["K"], cfg["seed"], kept, train_acc, test_acc, test_std))
+        basis_fp = float(torch.linalg.norm(V).item())  # ||V||_F fingerprint
+        results.append((cfg["label"], cfg["K"], cfg["seed"], kept, basis_fp, train_acc, test_acc, test_std))
 
     print("\n\n" + "#" * 64)
     print("# SUMMARY  (test = seen users, UNSEEN prompts -- the generalization metric)")
     print("#" * 64)
-    header = f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}"
+    header = (f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | "
+              f"{'basis_fp':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}")
     print(header)
     print("-" * len(header))
-    for label, K, seed, kept, tr, te, std in results:
-        print(f"{label:>9} | {K:>3} | {seed:>4} | {kept:>10} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
+    for label, K, seed, kept, fp, tr, te, std in results:
+        print(f"{label:>9} | {K:>3} | {seed:>4} | {kept:>10} | "
+              f"{fp:>10.4f} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
+    print("\nbasis_fp = ||V||_F (permutation/sign-invariant). Same machine + seed "
+          "should match tightly; teammates compare this to confirm the same bases.")
 
 
 if __name__ == "__main__":
