@@ -62,14 +62,26 @@ produced by:  python prepare.py  &&  python generate-prism-embeddings.py
 
 OUTPUT
 ------
-Prints a summary table for each part AND writes:
+Prints a summary table for each part, THEN a PER-CONFIG BASIS DETAIL section
+(one fingerprint row per individual basis vector -- screenshot this to share),
+AND writes:
   - basis_reproducibility_results.csv : the summary rows (gitignored)
-  - basis_matrices.pt                 : the FULL [4096, K] basis matrix for every
-                                        run, keyed by run (e.g. PART2_K10_seed42),
-                                        so you can load and compare the actual
-                                        basis vectors -- including sub-threshold
-                                        ones -- not just the scalar fingerprint.
+  - basis_matrices.pt                 : a self-contained dict per run, keyed by run
+                                        (e.g. PART2_K10_seed42). Each entry holds
+                                        the FULL [4096, K] basis matrix V, the full
+                                        [num_users, K] user weights W, and all the
+                                        summary metadata -- so every number in the
+                                        printout (and the per-basis detail) is
+                                        derivable from this file alone. Load and
+                                        compare the actual basis vectors directly,
+                                        including sub-threshold ones.
 Both are gitignored; copy them to your local machine to share / compare.
+
+The 4096-dim basis vectors are too long to print in full, so the PER-CONFIG
+BASIS DETAIL table prints, for each of the K bases, a set of order-/sign-aware
+fingerprints (norm, alignment to V_sft, checksum, max user weight, kept?). Two
+runs that learned the same bases produce the same set of rows (up to ordering);
+the raw vectors themselves live in basis_matrices.pt for exact comparison.
 
 USAGE (run from inside the PRISM/ directory)
 --------------------------------------------
@@ -165,8 +177,9 @@ def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
     # would only hand back the pruned columns, hiding the sub-threshold bases.
     am = LoRe_regularized(V_final, args.alpha, len(train_seen), 4096, K,
                           args.iters, args.lr)
-    W_kept, V_kept = am.train(train_seen)   # pruned: what downstream eval uses
-    V_full = am.V.detach()                  # [4096, K] -- every basis column
+    W_kept, V_kept = am.train(train_seen)            # pruned: what eval uses
+    V_full = am.V.detach()                           # [4096, K] every basis column
+    W_full = torch.softmax(am.W, dim=1).detach()     # [num_users, K] full weights
 
     # Accuracy uses the pruned (canonical) bases; the dropped near-zero-weight
     # columns add ~nothing, so this matches the repo's reported metric.
@@ -179,7 +192,7 @@ def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
         "basis_fp": float(torch.linalg.norm(V_full).item()),  # ||V||_F over ALL K cols
         "train_acc": train_acc, "test_acc": test_acc, "test_std": test_std,
     }
-    return row, V_full.cpu()
+    return row, V_full.cpu(), W_full.cpu()
 
 
 def print_table(title, rows):
@@ -194,6 +207,49 @@ def print_table(title, rows):
         print(f"{r['run']:>9} | {r['K']:>3} | {r['seed']:>4} | {r['bases_kept']:>10} | "
               f"{r['basis_fp']:>10.4f} | {r['train_acc']:>9.4f} | "
               f"{r['test_acc']:>9.4f} | {r['test_std']:>8.4f}")
+
+
+def print_basis_detail(key, m, vsft):
+    """Pretty-print one fingerprint row per individual basis vector for a run.
+
+    The full 4096-dim vectors can't be printed legibly, so for each basis column
+    V[:, i] we print order-/sign-aware fingerprints that two identical fits will
+    reproduce (up to column ordering):
+      norm         ||V[:, i]||         -- magnitude of the basis
+      cos(V_sft)   cosine to the backbone reward direction -- where it points
+      checksum     sum of the entries  -- catches a different vector w/ same norm
+      max_user_wt  max over users of softmax(W)[:, i] -- the pruning criterion
+      kept         yes if max_user_wt >= 1e-2 (survived pruning), else no
+    Rows are sorted by norm (descending) so the ordering is canonical and two
+    teammates' tables line up row-for-row regardless of internal column order.
+    The raw vectors live in basis_matrices.pt for exact element-wise comparison.
+    """
+    V = m["V"]                      # [4096, K]
+    W = m["W"]                      # [num_users, K]
+    vsft = vsft.reshape(-1).to(V.dtype)
+    vsft_unit = vsft / (torch.linalg.norm(vsft) + 1e-12)
+    K = V.shape[1]
+    rows = []
+    for i in range(K):
+        col = V[:, i]
+        norm = float(torch.linalg.norm(col).item())
+        cos = float((col @ vsft_unit / (norm + 1e-12)).item())
+        checksum = float(col.sum().item())
+        max_wt = float(W[:, i].max().item())
+        rows.append((norm, cos, checksum, max_wt, max_wt >= 1e-2))
+    rows.sort(key=lambda r: r[0], reverse=True)
+
+    print("\n\n" + "=" * 78)
+    print(f"  BASIS DETAIL: {key}   "
+          f"(K={K}, bases_kept={m['bases_kept']}, ||V||_F={m['basis_fp']:.4f})")
+    print("=" * 78)
+    header = (f"{'basis':>5} | {'norm':>12} | {'cos(V_sft)':>11} | "
+              f"{'checksum':>13} | {'max_user_wt':>11} | {'kept':>4}")
+    print(header)
+    print("-" * len(header))
+    for idx, (norm, cos, checksum, max_wt, kept) in enumerate(rows):
+        print(f"{idx:>5} | {norm:>12.5f} | {cos:>11.5f} | {checksum:>13.5f} | "
+              f"{max_wt:>11.5f} | {'yes' if kept else 'no':>4}")
 
 
 def parse_args():
@@ -243,21 +299,28 @@ def main():
     V_final = get_reference_direction()
 
     part1, part2 = [], []
-    matrices = {}  # run-key -> full [4096, K] basis matrix, saved for inspection
+    # run-key -> self-contained dict {V[4096,K], W[users,K], **metadata}, so every
+    # printed number is derivable from this file alone.
+    matrices = {}
+    order = []  # preserve run order for the per-config detail printout
 
     # ---- PART 1: rank sweep (vary K, fixed seed) -- bases differ by design ----
     for K in args.rank_values:
-        row, V_full = run_one("PART1-rank", f"K={K}", K, args.rank_seed,
-                              V_final, train_seen, test_seen, args)
+        row, V_full, W_full = run_one("PART1-rank", f"K={K}", K, args.rank_seed,
+                                      V_final, train_seen, test_seen, args)
         part1.append(row)
-        matrices[f"PART1_K{K}_seed{args.rank_seed}"] = V_full
+        key = f"PART1_K{K}_seed{args.rank_seed}"
+        matrices[key] = {"V": V_full, "W": W_full, **row}
+        order.append(key)
 
     # ---- PART 2: seed variance / team reproducibility (fixed K, vary seed) ----
     for s in args.seed_values:
-        row, V_full = run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
-                              V_final, train_seen, test_seen, args)
+        row, V_full, W_full = run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
+                                      V_final, train_seen, test_seen, args)
         part2.append(row)
-        matrices[f"PART2_K{args.fixed_K}_seed{s}"] = V_full
+        key = f"PART2_K{args.fixed_K}_seed{s}"
+        matrices[key] = {"V": V_full, "W": W_full, **row}
+        order.append(key)
 
     print_table(
         f"PART 1  RANK SWEEP  (seed fixed at {args.rank_seed}; bases differ between rows by design)",
@@ -266,11 +329,23 @@ def main():
         f"PART 2  SEED VARIANCE  (K fixed at {args.fixed_K}; compare the seed=42 row to teammates)",
         part2)
 
-    # ---- save the FULL basis matrices (all K columns, pre-pruning) ----
+    # ---- PER-CONFIG BASIS DETAIL: one fingerprint row per basis vector ----
+    # This is the screenshot-and-share view: it surfaces EVERY basis (including
+    # sub-threshold ones) so teammates can confirm they learned the same bases.
+    print("\n\n" + "#" * 80)
+    print("# PER-CONFIG BASIS DETAIL  (one row per basis vector; sorted by norm)")
+    print("# Same fit -> same set of rows up to ordering. Raw vectors in the .pt file.")
+    print("#" * 80)
+    vsft_cpu = V_final.detach().cpu()
+    for key in order:
+        print_basis_detail(key, matrices[key], vsft_cpu)
+
+    # ---- save the FULL basis matrices + weights + metadata per run ----
     torch.save(matrices, args.matrices_out)
-    print(f"\nSaved {len(matrices)} full basis matrices (each [4096, K], "
-          f"pre-pruning) to {args.matrices_out}")
-    print("  load with: torch.load('basis_matrices.pt') -> dict[run_key] = V[4096,K]")
+    print(f"\nSaved {len(matrices)} runs to {args.matrices_out} "
+          f"(each: full V[4096,K], full W[users,K], and metadata)")
+    print("  load with: m = torch.load('basis_matrices.pt'); "
+          "m['PART2_K10_seed42']['V'] -> [4096, K]")
 
     # ---- write combined CSV (gitignored; copy to your machine to share) ----
     fields = ["part", "run", "K", "seed", "alpha", "iters", "lr",
