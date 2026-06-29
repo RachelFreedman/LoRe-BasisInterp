@@ -2,19 +2,24 @@
 """
 Quick LoRe-PRISM experiment runner.
 
-Runs the PRISM basis-learning experiment 3 times, varying ONE hyperparameter
-(the number of basis functions K by default), then prints a summary table.
+Runs the PRISM basis-learning experiment several times, varying ONE
+hyperparameter, then prints a summary table. Fully argument-driven so it is a
+single shareable command -- no code edits needed to switch what is swept.
 
 Prerequisite (one-time, slow): the cached embeddings must already exist:
     data/prism/train_embeddings.pkl
     data/prism/test_embeddings.pkl
 produced by:  python prepare.py  &&  python generate-prism-embeddings.py
 
-Run from inside the PRISM/ directory:
-    python run_experiment.py
+Examples (run from inside the PRISM/ directory):
+    python run_experiment.py                       # vary K over 5,10,20 (seed 0)
+    python run_experiment.py --vary seed           # vary seed over 0,1,2 (K=10)
+    python run_experiment.py --vary K --values 1,5,20,50
+    python run_experiment.py --vary seed --values 0,1,2,3,4 --fixed-K 5
 """
 import os
 import sys
+import argparse
 import random
 import numpy as np
 import torch
@@ -27,21 +32,15 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils import solve_regularized_simplex  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# EXPERIMENT CONFIG  --  edit these rows to change the experiment.
-# Each run changes ONE knob. Default: vary K (number of basis functions),
-# seed held fixed. To study the seed instead, set all K equal and vary "seed".
-# ---------------------------------------------------------------------------
-ALPHA = 1e4        # regularization strength toward the base reward (fixed)
-NUM_ITERS = 20000  # optimization steps (paper uses 20000; lower => faster)
-LR = 0.5           # learning rate
 
-RUNS = [
-    {"label": "K=5",  "K": 5,  "seed": 0},
-    {"label": "K=10", "K": 10, "seed": 0},
-    {"label": "K=20", "K": 20, "seed": 0},
-]
-# ---------------------------------------------------------------------------
+def build_runs(args):
+    """Turn CLI args into a list of run configs, sweeping exactly one knob."""
+    if args.vary == "K":
+        values = args.values if args.values is not None else [5, 10, 20]
+        return [{"label": f"K={v}", "K": int(v), "seed": args.fixed_seed} for v in values]
+    else:  # vary == "seed"
+        values = args.values if args.values is not None else [0, 1, 2]
+        return [{"label": f"seed={v}", "K": args.fixed_K, "seed": int(v)} for v in values]
 
 
 def set_seed(s):
@@ -96,8 +95,29 @@ def accuracy(W, V, features):
     return float(np.mean(accs)), float(np.std(accs))
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description="Run the LoRe-PRISM experiment, sweeping one knob.")
+    p.add_argument("--vary", choices=["K", "seed"], default="K",
+                   help="which hyperparameter to sweep (default: K)")
+    p.add_argument("--values", type=lambda s: [x.strip() for x in s.split(",")], default=None,
+                   help="comma-separated values for the swept knob (e.g. 5,10,20)")
+    p.add_argument("--fixed-K", type=int, default=10,
+                   help="K to hold fixed when --vary seed (default: 10)")
+    p.add_argument("--fixed-seed", type=int, default=0,
+                   help="seed to hold fixed when --vary K (default: 0)")
+    p.add_argument("--alpha", type=float, default=1e4, help="regularization strength (default: 1e4)")
+    p.add_argument("--iters", type=int, default=20000, help="optimization steps (default: 20000)")
+    p.add_argument("--lr", type=float, default=0.5, help="learning rate (default: 0.5)")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
+    runs = build_runs(args)
+
     print(f"Device: {device}")
+    print(f"Sweep: vary {args.vary} over {[r[args.vary] for r in runs]} "
+          f"| alpha={args.alpha} iters={args.iters} lr={args.lr}")
     print("Loading cached embeddings...")
     train_emb = torch.load("data/prism/train_embeddings.pkl")
     test_emb = torch.load("data/prism/test_embeddings.pkl")
@@ -111,14 +131,14 @@ def main():
     V_final = get_reference_direction()
 
     results = []
-    for cfg in RUNS:
+    for cfg in runs:
         print("\n" + "=" * 64)
-        print(f"RUN {cfg['label']}  (K={cfg['K']}, seed={cfg['seed']}, alpha={ALPHA}, iters={NUM_ITERS})")
+        print(f"RUN {cfg['label']}  (K={cfg['K']}, seed={cfg['seed']}, alpha={args.alpha}, iters={args.iters})")
         print("=" * 64)
         set_seed(cfg["seed"])
         W, V = solve_regularized_simplex(
-            V_final, ALPHA, train_seen, cfg["K"],
-            num_iterations=NUM_ITERS, learning_rate=LR,
+            V_final, args.alpha, train_seen, cfg["K"],
+            num_iterations=args.iters, learning_rate=args.lr,
         )
         train_acc, _ = accuracy(W, V, train_seen)
         test_acc, test_std = accuracy(W, V, test_seen)
@@ -128,11 +148,11 @@ def main():
     print("\n\n" + "#" * 64)
     print("# SUMMARY  (test = seen users, UNSEEN prompts -- the generalization metric)")
     print("#" * 64)
-    header = f"{'run':>7} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}"
+    header = f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}"
     print(header)
     print("-" * len(header))
     for label, K, seed, kept, tr, te, std in results:
-        print(f"{label:>7} | {K:>3} | {seed:>4} | {kept:>10} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
+        print(f"{label:>9} | {K:>3} | {seed:>4} | {kept:>10} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
 
 
 if __name__ == "__main__":
