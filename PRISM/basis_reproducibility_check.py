@@ -28,6 +28,7 @@ Examples (run from inside the PRISM/ directory):
 """
 import os
 import sys
+import csv
 import argparse
 import random
 import numpy as np
@@ -117,6 +118,8 @@ def parse_args():
     p.add_argument("--alpha", type=float, default=1e4, help="regularization strength (default: 1e4)")
     p.add_argument("--iters", type=int, default=20000, help="optimization steps (default: 20000)")
     p.add_argument("--lr", type=float, default=0.5, help="learning rate (default: 0.5)")
+    p.add_argument("--out", default="basis_reproducibility_results.csv",
+                   help="path to write the summary CSV (default: basis_reproducibility_results.csv)")
     return p.parse_args()
 
 
@@ -167,6 +170,15 @@ def main():
               f"{fp:>10.4f} | {tr:>9.4f} | {te:>9.4f} | {std:>8.4f}")
     print("\nbasis_fp = ||V||_F (permutation/sign-invariant). Same machine + seed "
           "should match tightly; teammates compare this to confirm the same bases.")
+
+    with open(args.out, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["run", "K", "seed", "bases_kept", "basis_fp",
+                         "train_acc", "test_acc", "test_std"])
+        for label, K, seed, kept, fp, tr, te, std in results:
+            writer.writerow([label, K, seed, kept,
+                             f"{fp:.4f}", f"{tr:.4f}", f"{te:.4f}", f"{std:.4f}"])
+    print(f"\nWrote results to {args.out}")
 
 
 if __name__ == "__main__":
