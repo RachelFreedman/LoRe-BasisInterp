@@ -11,7 +11,17 @@ import torch.nn.functional as F
 import numpy as np
 import random
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda:0" if torch.cuda.is_available() else "cpu"))
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
+
 
 def simulate_user(reward_tensor, features, w):
     num_prompts = len(reward_tensor)
@@ -585,11 +595,13 @@ def run_regularized(K_list, alpha_list, V_final, train_features, test_features_s
             else: 
                 W_joint, V_joint = solve_regularized_simplex(V_final, alpha, train_features, K, num_iterations= 20000, learning_rate=0.5)
             
+                import os
+                os.makedirs("checkpoints", exist_ok=True)
                 # Save V_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_V_lore_K_{K}_alpha_{alpha}.pt"
+                filename = f"checkpoints/PRISM_V_lore_K_{K}_alpha_{alpha}.pt"
                 torch.save(V_joint, filename)
                 # Save W_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_W_lore_seen_{K}_{alpha}.pt"
+                filename = f"checkpoints/PRISM_W_lore_seen_{K}_{alpha}.pt"
                 torch.save(W_joint.detach().cpu(), filename)
 
             print("Train Performance")

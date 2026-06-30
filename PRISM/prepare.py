@@ -97,12 +97,16 @@ for url, filepath in files_to_download:
         print(f"File {filepath} already exists and is valid.")
 
 # should correspond to parameters in training/evaluation
-seed=123
-
 import os
+import sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+import utils
+
+utils.set_seed(42)
+
 import json
 import numpy as np
-np.random.seed(seed=seed)
 
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -224,7 +228,6 @@ with open ("data/prism/prism_data_dialog.json", 'w') as f:
 
 # split users
 import numpy as np
-np.random.seed(seed=seed)
 
 user_ids = np.array(list(data_user.keys()))
 np.random.shuffle(user_ids)

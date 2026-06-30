@@ -6,8 +6,17 @@
 
 import torch
 from collections import defaultdict
+import random
+import numpy as np
 
-device = "cuda:0"
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
+import os, sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+import utils
+
+utils.set_seed(42)
 
 def group_embeddings_by_user(train_embeddings, test_embeddings, device):
     def process_dataset(dataset, seen_value, split_name):
@@ -46,9 +55,7 @@ test_embeddings = torch.load("data/prism/test_embeddings.pkl")
 
 train_seen, train_unseen, test_seen, test_unseen = group_embeddings_by_user(train_embeddings, test_embeddings, device)
 
-import os, sys
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(SCRIPT_DIR))
+
 from utils import *
 
 K_list = [0, 1, 5, 10, 15, 20, 25, 50]
