@@ -54,6 +54,11 @@ def generate_prism_embeddings(
     start_idx = 0
     checkpoint_path = output_path + ".checkpoint"
     
+    # If the final embeddings file already exists, we are completely done!
+    if os.path.exists(output_path):
+        print(f"Final embeddings already exist at {output_path}! Skipping generation.")
+        return torch.load(output_path)
+    
     if os.path.exists(checkpoint_path):
         print(f"Resuming from checkpoint {checkpoint_path}")
         embeddings_data = torch.load(checkpoint_path)

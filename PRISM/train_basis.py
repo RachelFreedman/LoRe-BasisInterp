@@ -110,6 +110,6 @@ plt.legend()
 
 alpha = alpha_list[0]
 # Save the plot
-plt.savefig(f'./generalization_accuracy_vs_rank_lore_alpha_{alpha}.png', dpi=300, bbox_inches='tight')
+plt.savefig(f'checkpoints/generalization_accuracy_vs_rank_lore_alpha_{alpha}.png', dpi=300, bbox_inches='tight')
 plt.show()
 plt.close()

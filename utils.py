@@ -37,7 +37,11 @@ def simulate_user(reward_tensor, features, w):
 
 def evaluate_model(X, V, w):
     # Compute the expression X @ V @ w
-    X = torch.tensor(X, dtype=torch.float32)
+    # Ensure X is on the same device as V and w
+    if isinstance(X, np.ndarray) or isinstance(X, list):
+        X = torch.tensor(X, dtype=torch.float32, device=V.device)
+    else:
+        X = X.to(torch.float32).to(V.device)
     # result = X @ V @ w
     result = X @ V @ w
     # Count the number of positive elements
@@ -362,8 +366,10 @@ class LoRe(nn.Module):
         # Compute the log-likelihood function
         i = 0
         for x in X:
-            # x = torch.tensor(x, dtype=torch.float32)
-            # logits =  x @ V_w[:,i] / 100.0
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32, device=self.V.device)
+            else:
+                x = x.to(dtype=torch.float32, device=self.V.device)
             logits =  x @ V_w[:,i] / 100.0
             # print(logits)
             log_likelihood = torch.log(torch.sigmoid(logits))
@@ -429,7 +435,10 @@ class PersonalizeBatch(nn.Module):
         for x in X:
             # V_w = V @ self.w[i]
             V_w = V @ F.softmax(self.w[i]) 
-            # x = torch.tensor(x, dtype=torch.float32)
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32, device=V.device)
+            else:
+                x = x.to(dtype=torch.float32, device=V.device)
             logits =  x @ V_w / 100.0
             # print(logits)
             log_likelihood = torch.log(torch.sigmoid(logits))
