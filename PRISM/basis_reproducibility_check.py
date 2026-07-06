@@ -100,7 +100,6 @@ import os
 import sys
 import csv
 import argparse
-import random
 import numpy as np
 import torch
 from collections import defaultdict
@@ -110,18 +109,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # Make utils.py importable (same trick train_basis.py uses)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils import LoRe_regularized  # noqa: E402
-
-
-def set_seed(s):
-    """Lock every RNG so basis initialization (and the learned bases) is
-    deterministic. This is the fix for LoRe's default non-seeded training that
-    the team agreed on -- without it the bases randomize on every run."""
-    random.seed(s)
-    np.random.seed(s)
-    torch.manual_seed(s)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(s)
+from utils import LoRe_regularized, set_seed  # noqa: E402
 
 
 def group_embeddings_by_user(dataset, seen_value, split_name):

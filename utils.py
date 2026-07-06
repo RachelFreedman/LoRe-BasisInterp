@@ -13,6 +13,19 @@ import random
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+def set_seed(s):
+    """Lock every RNG so basis initialization (and the learned bases) is
+    deterministic. Call this after loading the backbone model and immediately
+    before solving, so the basis init RNG state is not perturbed by earlier,
+    non-deterministic model loading."""
+    random.seed(s)
+    np.random.seed(s)
+    torch.manual_seed(s)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(s)
+
+
 def simulate_user(reward_tensor, features, w):
     num_prompts = len(reward_tensor)
     feature_diff = []
