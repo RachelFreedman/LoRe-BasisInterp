@@ -106,7 +106,7 @@ def run_rank_comparison(concept_vectors_path="data/prism/concept_vectors.pt", ch
     plt.title("Basis Interpretability vs. Rank (K)")
     fig.tight_layout()  
     plt.savefig(os.path.join(output_dir, "rank_comparison_plot.png"), dpi=300)
-    print(f"\n✅ Plot saved to {output_dir}/rank_comparison_plot.png")
+    print(f"\nPlot saved to {output_dir}/rank_comparison_plot.png")
 
 if __name__ == "__main__":
     run_rank_comparison()

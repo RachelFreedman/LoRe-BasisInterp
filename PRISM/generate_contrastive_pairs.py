@@ -123,7 +123,7 @@ def main():
             
         current_count = len(all_pairs[concept_name])
         if current_count >= target_pairs_per_concept:
-            print(f"✅ {concept_name} already has {current_count} pairs. Skipping.")
+            print(f"{concept_name} already has {current_count} pairs. Skipping.")
             continue
             
         print(f"\nGenerating pairs for '{concept_name}' (Current: {current_count}/{target_pairs_per_concept})")

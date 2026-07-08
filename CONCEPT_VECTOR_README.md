@@ -6,7 +6,7 @@ This work builds on top of the [LoRe-BasisInterp](https://github.com/RachelFreed
 
 ---
 
-## 🔬 Research Question
+## Research Question
 
 > *Do the basis vectors learned by LoRe's low-rank reward model correspond to distinct, human-interpretable concepts (e.g., helpfulness, formatting, factuality)?*
 
@@ -14,7 +14,7 @@ We answer this by constructing **concept vectors** — pure mathematical directi
 
 ---
 
-## 🧠 Methodology
+## Methodology
 
 ### 1. Concept Library
 We define 11 concepts (7 from the PRISM dataset, 4 from the Reward-Lens paper) representing human-interpretable traits:
@@ -51,7 +51,7 @@ We ablate (zero out) individual bases and measure the resulting drop in concept-
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 PRISM/
@@ -81,7 +81,7 @@ results/
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 ```bash
@@ -113,7 +113,7 @@ python PRISM/causal_intervention.py
 
 ---
 
-## 📊 Key Findings
+## Key Findings
 
 ### Rank Comparison
 | Rank (K) | Learned Bases | Significant Bases | Interpretability Score | Concepts Covered |
@@ -133,7 +133,7 @@ Causal ablation and inter-basis similarity analysis revealed that **all checkpoi
 
 ---
 
-## 🔗 References
+## References
 
 - **LoRe Paper:** [Personalizing LLMs via Low-Rank Reward Modeling](https://arxiv.org/abs/2504.14439)
 - **Reward Model:** [Skywork-Reward-Llama-3.1-8B-v0.2](https://huggingface.co/Skywork/Skywork-Reward-Llama-3.1-8B-v0.2)

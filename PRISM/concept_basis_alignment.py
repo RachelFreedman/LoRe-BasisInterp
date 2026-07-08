@@ -117,7 +117,7 @@ def run_alignment_analysis(concept_vectors_path, basis_matrix_path, output_dir="
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "similarity_heatmap.png"), dpi=300)
-    print(f"\n✅ Analysis complete! Check {output_dir}/alignment_report.csv and similarity_heatmap.png")
+    print(f"\nAnalysis complete! Check {output_dir}/alignment_report.csv and similarity_heatmap.png")
 
 if __name__ == "__main__":
     # Point this to a specific checkpoint you want to evaluate

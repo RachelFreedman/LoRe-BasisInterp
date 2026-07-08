@@ -72,7 +72,7 @@ def compute_concept_vectors(input_file, output_file, model_name="Skywork/Skywork
             
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     torch.save(concept_vectors, output_file)
-    print(f"\n✅ Saved concept vectors to {output_file}")
+    print(f"\nSaved concept vectors to {output_file}")
 
 if __name__ == "__main__":
     compute_concept_vectors(

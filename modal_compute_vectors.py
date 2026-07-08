@@ -28,7 +28,7 @@ image = (
     secrets=[modal.Secret.from_name("huggingface")]
 )
 def run_compute_vectors():
-    print("🚀 Computing Concept Vectors on Modal...")
+    print("Computing Concept Vectors on Modal...")
     
     os.chdir("/workspace")
     
@@ -45,17 +45,17 @@ def run_compute_vectors():
         "python", "PRISM/compute_concept_vectors.py"
     ], check=True)
     
-    print("\n✅ Concept vectors computed in the cloud. Syncing back to local...")
+    print("\nConcept vectors computed in the cloud. Syncing back to local...")
     with open("data/prism/concept_vectors.pt", "rb") as f:
         return f.read()
 
 @app.local_entrypoint()
 def main():
     import os
-    print("🚀 Submitting Concept Vector Computation to Modal Cloud...")
+    print("Submitting Concept Vector Computation to Modal Cloud...")
     file_bytes = run_compute_vectors.remote()
     
     os.makedirs("data/prism", exist_ok=True)
     with open("data/prism/concept_vectors.pt", "wb") as f:
         f.write(file_bytes)
-    print("✅ Successfully synced concept_vectors.pt back to your local machine!")
+    print("Successfully synced concept_vectors.pt back to your local machine!")
