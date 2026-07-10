@@ -2,12 +2,7 @@
 
 ## What this is
 
-This trains a TopK sparse autoencoder on the 4096-dimensional PRISM/Skywork
-embeddings used by LoRe. The goal is to preserve LoRe basis scores while
-producing sparse features for later inspection. **D3** is the current selected
-configuration (`16384` dictionary size, `k=256`, centered inputs, unit-norm
-decoder, auxiliary dead-feature loss). Semantic labeling is not part of this
-branch.
+This trains a TopK sparse autoencoder on the 4096-dimensional PRISM/Skywork embeddings used by LoRe. The goal is to preserve LoRe basis scores while producing sparse features. **D3** is the current selected configuration (`16384` dict, `k=256`, center inputs, unit-norm decoder, aux dead-feature loss). Semantic labeling is not part of this branch.
 
 ## How to run
 
@@ -48,9 +43,8 @@ bash sae/run_d3.sh all
 ```
 
 - **`train` is the GPU-intensive step.**
-- `build` / `evaluate` / `diagnose` / `analyze` auto-select CUDA, MPS, or CPU
-  when available (via each script’s `--device auto` default).
-- The runner fails with a clear message if an input or checkpoint is missing.
+- `build` / `evaluate` / `diagnose` / `analyze` auto-select CUDA, MPS, or CPU (`--device auto`).
+- The runner errors clearly if an input or checkpoint is missing.
 
 ## Defaults
 
@@ -89,8 +83,7 @@ Full config: `sae/configs/d3.yaml`.
 | Top 5% activation mass | 0.8557 |
 | Effective feature count | approximately 666 |
 
-Small floating-point differences across devices are acceptable. The committed
-reference row is in `sae/d3_results.csv`.
+Small floating-point differences across devices are acceptable. The committed reference row is in `sae/d3_results.csv`.
 
 **D3 passes the predefined LoRe-preservation gate.**
 
@@ -107,25 +100,20 @@ reference row is in `sae/d3_results.csv`.
 | `sae/results/d3/top_features_per_basis_operational.csv` | Attribution for operational bases | Top contribution-ranked features for bases **1, 3, 9** |
 | `sae/results/d3/attribution_meta.json` | Attribution settings and scope | Run key and operational basis IDs |
 
-Generated paths under `sae/data/`, `sae/checkpoints/`, and `sae/results/` are
-gitignored. Optional supplementary attribution for all 10 bases:
-`sae/results/d3/top_features_per_basis.csv`.
+Generated paths under `sae/data/`, `sae/checkpoints/`, and `sae/results/` are gitignored. Optional all-bases attribution: `sae/results/d3/top_features_per_basis.csv`.
 
 ## What the main metrics mean
 
 - **Mean basis Pearson:** how well reconstructed embeddings preserve LoRe basis scores.
 - **Pair-score Pearson:** how well chosen-minus-rejected LoRe scores are preserved.
-- **Accuracy drop:** original LoRe accuracy minus reconstructed accuracy (lower or negative is better).
+- **Accuracy drop:** original LoRe accuracy minus reconstructed accuracy.
 - **Dead-feature rate:** fraction of SAE features that never activate on the split.
-- **Live-feature Gini:** inequality of usage among features that activate (higher = more concentrated).
+- **Live-feature Gini:** inequality of usage among features that activate.
 - **Top 5% activation mass:** share of total activation carried by the most-used 5% of features.
 
 ## Current limitation
 
-Feature usage remains concentrated. D3 passes the LoRe-preservation gate, but
-the test live-feature Gini is about 0.91 and the top 5% of features carry about
-86% of activation mass. I am still exploring whether this concentration can be
-reduced without weakening LoRe preservation.
+Feature usage remains concentrated. D3 passes the LoRe-preservation gate, but the test live-feature Gini is about 0.91 and the top 5% of features carry about 86% of activation mass. I am still exploring whether this concentration can be reduced without weakening LoRe preservation.
 
 ## Scope
 
