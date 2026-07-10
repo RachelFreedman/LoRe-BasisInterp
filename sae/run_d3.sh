@@ -19,9 +19,11 @@ usage() {
   cat <<'EOF'
 Usage: bash sae/run_d3.sh <command>
 
+Run all commands from the repository root.
+
 Commands:
   build      Build SAE train/val/test tensors from PRISM embeddings
-  train      Train the D3 TopK SAE
+  train      Train the D3 TopK SAE (GPU recommended)
   evaluate   Evaluate reconstruction and LoRe preservation
   diagnose   Compute live/dead and concentration diagnostics
   analyze    Numeric basis-feature attribution (contribution-ranked)
@@ -36,6 +38,12 @@ Outputs (gitignored):
   sae/data/
   sae/checkpoints/d3/model.pt
   sae/results/d3/
+    sae_eval_summary.json
+    basis_score_correlations.csv
+    sae_diagnostics_summary.json
+    top_active_features.csv
+    top_features_per_basis_operational.csv
+    attribution_meta.json
 EOF
 }
 
