@@ -1,0 +1,41 @@
+# D3: 16384/k256 TopK SAE (center + unit-norm decoder + aux dead-feature loss)
+input_dim: 4096
+architecture: topk_sae
+dict_size: 16384
+k: 256
+loss: reconstruction_mse_plus_aux_dead
+train_data: chosen_plus_rejected_embeddings
+canonical_lore_run_key: PART2_K10_seed42
+
+data:
+  train_embeddings_path: PRISM/data/prism/train_embeddings.pkl
+  test_embeddings_path: PRISM/data/prism/test_embeddings.pkl
+  basis_matrices_path: PRISM/basis_matrices.pt
+  output_dir: sae/data
+  train_fraction: 0.8
+  val_fraction: 0.1
+  test_fraction: 0.1
+  split_seed: 123
+
+training:
+  batch_size: 256
+  learning_rate: 0.0003
+  max_steps: 20000
+  log_every: 100
+  eval_every: 500
+  checkpoint_every: 1000
+  sparsity_mode: topk
+  aux_k_coef: 0.03125
+  aux_k: 256
+  basis_score_coef: 0.0
+  dead_feature_threshold: 1.0e-5
+  normalize_decoder: true
+  center_inputs: true
+  activation_ema_beta: 0.99
+  early_abort_step: 2000
+  early_abort_dead_rate: 0.9
+
+evaluation:
+  mean_basis_score_corr_min: 0.95
+  min_basis_score_corr_min: 0.90
+  max_pairwise_accuracy_drop: 0.02

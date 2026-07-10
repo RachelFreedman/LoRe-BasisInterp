@@ -1,0 +1,11 @@
+data/
+checkpoints/
+results/
+wandb/
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.log
+__pycache__/
+*.py[cod]
