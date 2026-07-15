@@ -84,6 +84,12 @@ V_final = last_linear_layer.weight[:,0].to(device).to(torch.float32).reshape(-1,
 # filename = f"./PRISM/V_ref.pt"
 # torch.save(V_final, filename)
 
+# Lock RNG here: after the (non-deterministic) model load and V_final
+# extraction, and before run_regularized() solves the bases -- so normal
+# training runs are reproducible, not just the dedicated check script.
+# Seed 42 = the team-agreed canonical value (matches the reproducibility check).
+set_seed(42)
+
 train_accuracies_joint, seen_user_unseen_prompts_accuracies_joint, few_shot_train_accuracies_few_shot, unseen_user_unseen_prompts_accuracies_few_shot, train_accuracies_joint_std, seen_user_unseen_prompts_accuracies_joint_std, few_shot_train_accuracies_few_shot_std, unseen_user_unseen_prompts_accuracies_few_shot_std = run_regularized(K_list, alpha_list, V_final, train_seen, test_seen, 
                 train_unseen, test_unseen, N, N_unseen, device)
 
