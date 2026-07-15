@@ -1,3 +1,8 @@
+__pycache__/
+*.pyc
+.DS_Store
+test_activations.py
+
 # Cached embeddings (large, regenerate via generate-prism-embeddings.py)
 PRISM/data/prism/*.pkl
 
