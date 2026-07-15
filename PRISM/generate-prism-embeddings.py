@@ -16,6 +16,13 @@ from collections import defaultdict
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
 
+import sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+import utils
+
+utils.set_seed(42)
+
 # Named function to replace lambda for pickle compatibility
 def nested_defaultdict():
     return defaultdict(list)
@@ -44,8 +51,24 @@ def generate_prism_embeddings(
     Later for given user_id (and specifiec chosen/rejected value, seen True or False value) gather all chosen embeddings as a tensor
     """
     embeddings_data = []
-    for entry in tqdm(dataset, desc="Generating embeddings"):
-        
+    start_idx = 0
+    checkpoint_path = output_path + ".checkpoint"
+    
+    # If the final embeddings file already exists, we are completely done!
+    if os.path.exists(output_path):
+        print(f"Final embeddings already exist at {output_path}! Skipping generation.")
+        return torch.load(output_path)
+    
+    if os.path.exists(checkpoint_path):
+        print(f"Resuming from checkpoint {checkpoint_path}")
+        embeddings_data = torch.load(checkpoint_path)
+        start_idx = len(embeddings_data)
+        print(f"Skipping first {start_idx} entries...")
+
+    for i, entry in enumerate(tqdm(dataset, desc="Generating embeddings", initial=start_idx, total=len(dataset))):
+        if i < start_idx:
+            continue
+            
         user_id = entry["extra_info"]["user_id"]
         dialog_id = entry["extra_info"]["dialog_id"]
         prompt = entry["prompt"]
@@ -65,6 +88,9 @@ def generate_prism_embeddings(
         with torch.no_grad():
             output = model(tokenized)
             embedding = output.last_hidden_state[0, -1].cpu()  # [hidden_dim]
+            del output
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         entry["extra_info"]["chosen_conv_embedding"] = embedding
 
@@ -78,13 +104,26 @@ def generate_prism_embeddings(
         with torch.no_grad():
             output = model(tokenized)
             embedding = output.last_hidden_state[0, -1].cpu()  # [hidden_dim]
+            del output
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         entry["extra_info"]["rejected_conv_embedding"] = embedding
 
         embeddings_data.append(entry)
+        
+        # Save a checkpoint every 100 steps to prevent data loss on timeout
+        if len(embeddings_data) % 100 == 0:
+            os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+            torch.save(embeddings_data, checkpoint_path)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     torch.save(embeddings_data, output_path)
+    
+    # Clean up checkpoint when fully complete
+    if os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
+        
     print(f"✅ Saved embeddings to {output_path}")
 
     return embeddings_data
@@ -92,14 +131,14 @@ def generate_prism_embeddings(
 
 if __name__ == "__main__":
     # --- Configuration ---
-    device = "cuda:0"
+    device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda:0" if torch.cuda.is_available() else "cpu"))
     model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
 
     # --- Load model and tokenizer ---
     model = AutoModel.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
-        device_map=device,
+        device_map="auto",
         attn_implementation="eager",
         num_labels=1,
     )

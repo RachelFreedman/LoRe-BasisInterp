@@ -11,7 +11,17 @@ import torch.nn.functional as F
 import numpy as np
 import random
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda:0" if torch.cuda.is_available() else "cpu"))
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
+
 
 
 def set_seed(s):
@@ -40,7 +50,11 @@ def simulate_user(reward_tensor, features, w):
 
 def evaluate_model(X, V, w):
     # Compute the expression X @ V @ w
-    X = torch.tensor(X, dtype=torch.float32)
+    # Ensure X is on the same device as V and w
+    if isinstance(X, np.ndarray) or isinstance(X, list):
+        X = torch.tensor(X, dtype=torch.float32, device=V.device)
+    else:
+        X = X.to(torch.float32).to(V.device)
     # result = X @ V @ w
     result = X @ V @ w
     # Count the number of positive elements
@@ -365,8 +379,10 @@ class LoRe(nn.Module):
         # Compute the log-likelihood function
         i = 0
         for x in X:
-            # x = torch.tensor(x, dtype=torch.float32)
-            # logits =  x @ V_w[:,i] / 100.0
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32, device=self.V.device)
+            else:
+                x = x.to(dtype=torch.float32, device=self.V.device)
             logits =  x @ V_w[:,i] / 100.0
             # print(logits)
             log_likelihood = torch.log(torch.sigmoid(logits))
@@ -432,7 +448,10 @@ class PersonalizeBatch(nn.Module):
         for x in X:
             # V_w = V @ self.w[i]
             V_w = V @ F.softmax(self.w[i]) 
-            # x = torch.tensor(x, dtype=torch.float32)
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, dtype=torch.float32, device=V.device)
+            else:
+                x = x.to(dtype=torch.float32, device=V.device)
             logits =  x @ V_w / 100.0
             # print(logits)
             log_likelihood = torch.log(torch.sigmoid(logits))
@@ -598,11 +617,13 @@ def run_regularized(K_list, alpha_list, V_final, train_features, test_features_s
             else: 
                 W_joint, V_joint = solve_regularized_simplex(V_final, alpha, train_features, K, num_iterations= 20000, learning_rate=0.5)
             
+                import os
+                os.makedirs("checkpoints", exist_ok=True)
                 # Save V_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_V_lore_K_{K}_alpha_{alpha}.pt"
+                filename = f"checkpoints/PRISM_V_lore_K_{K}_alpha_{alpha}.pt"
                 torch.save(V_joint, filename)
                 # Save W_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_W_lore_seen_{K}_{alpha}.pt"
+                filename = f"checkpoints/PRISM_W_lore_seen_{K}_{alpha}.pt"
                 torch.save(W_joint.detach().cpu(), filename)
 
             print("Train Performance")
