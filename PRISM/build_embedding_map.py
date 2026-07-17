@@ -1,36 +1,65 @@
 """
 build_embedding_map.py
 
-Builds a lookup dictionary from the train/test embedding pkl files that maps
-each (user_id, dialog_id, turn_nb) to its embeddings + full conversation text.
+1. Loads train/test embeddings
+2. Builds embedding_map.pkl: lookup dict keyed by (user_id, dialog_id, turn_nb)
+   with conversation text + chosen/rejected/diff embeddings
+3. Trains LoRe bases for all (K, alpha) combinations using solve_regularized_simplex
+4. Scores all N conversations against all K basis vectors for every (K, alpha) run
+5. Saves basis_scores.pkl: nested dict keyed by "K{K}_alpha{alpha}"
 
-Also computes basis scores for every conversation against every basis vector
-and saves the full score matrix.
+Does NOT rely on basis_matrices.pt — trains fresh bases from the embeddings.
 
-Usage:
+Usage (run from PRISM/ directory on GPU cluster):
     python build_embedding_map.py
 
-Outputs:
-    embedding_map.pkl       -- full lookup dict, one entry per conversation turn
-    basis_scores.pkl        -- dict with:
-                                 "keys"   : list of (user_id, dialog_id, turn_nb)
-                                 "scores" : [N, K] tensor of basis scores
-                                 "V"      : [4096, K] basis matrix
+Requires:
+    data/prism/train_embeddings.pkl
+    data/prism/test_embeddings.pkl
+    Skywork model (for V_sft extraction)
+    ../utils.py
 
+Outputs:
+    embedding_map.pkl    -- flat lookup dict, one entry per conversation turn
+    basis_scores.pkl     -- dict keyed by "K{K}_alpha{alpha}", each with:
+                              "keys"   : list of (user_id, dialog_id, turn_nb)
+                              "scores" : [N, K] tensor
+                              "V"      : [4096, K] basis matrix
+                              "K"      : int
+                              "alpha"  : float
 """
 
+import os
+import sys
 import torch
+import torch.nn.functional as F
 import pickle
+from collections import defaultdict
+from transformers import AutoModel
 
 # ── Config ────────────────────────────────────────────────────────────────────
-TRAIN_PKL     = "data/prism/train_embeddings.pkl"
-TEST_PKL      = "data/prism/test_embeddings.pkl"
-BASIS_PT      = "basis_matrices.pt"
-BASIS_RUN_KEY = "PART2_K10_seed42"  # ['PART1_K5_seed42', 'PART1_K10_seed42', 'PART1_K20_seed42','PART2_K10_seed0', 'PART2_K10_seed1', 'PART2_K10_seed2', 'PART2_K10_seed42']
-OUT_MAP       = "embedding_map.pkl"
-OUT_SCORES    = "basis_scores.pkl"
+TRAIN_PKL   = "data/prism/train_embeddings.pkl"
+TEST_PKL    = "data/prism/test_embeddings.pkl"
+MODEL_NAME  = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
+DEVICE      = os.environ.get("DEVICE", "cuda:0" if torch.cuda.is_available() else "cpu")
+SEED        = 42
+
+K_LIST      = [1, 5, 10, 15, 20, 25, 50]
+ALPHA_LIST  = [1e3, 1e4, 1e5]
+NUM_ITERS   = 20000
+LR          = 0.5
+
+OUT_MAP     = "embedding_map.pkl"
+OUT_SCORES  = "basis_scores.pkl"
 # ──────────────────────────────────────────────────────────────────────────────
 
+# import utils from parent directory (same as train_basis.py does)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+from utils import solve_regularized_simplex, set_seed
+
+
+# ── Step 1: Load embeddings ───────────────────────────────────────────────────
 
 def load_pkl(path):
     print(f"Loading {path} ...")
@@ -39,33 +68,22 @@ def load_pkl(path):
     return data
 
 
+# ── Step 2: Build flat embedding map ─────────────────────────────────────────
+
 def build_embedding_map(train_data, test_data):
     """
     Returns a dict keyed by (user_id, dialog_id, turn_nb).
-    Each value contains:
-        chosen_embedding    [4096] float tensor
-        rejected_embedding  [4096] float tensor
-        diff_embedding      chosen - rejected  [4096]
-        prompt              list of {"role", "content"} dicts
-        chosen_utterance    str
-        rejected_utterance  list[str]
-        user_id, dialog_id, turn_nb, split, seen
+    Each value has: chosen/rejected/diff embeddings + conversation text + metadata.
     """
     embedding_map = {}
 
     for split_name, dataset in [("train", train_data), ("test", test_data)]:
         for entry in dataset:
             info = entry["extra_info"]
-
-            key = (
-                info["user_id"],
-                info["dialog_id"],
-                info["turn_nb"],
-            )
+            key = (info["user_id"], info["dialog_id"], info["turn_nb"])
 
             chosen_emb   = info.get("chosen_conv_embedding")
             rejected_emb = info.get("rejected_conv_embedding")
-
             if chosen_emb is None or rejected_emb is None:
                 continue
 
@@ -90,72 +108,163 @@ def build_embedding_map(train_data, test_data):
                 "seen":      info.get("seen", None),
             }
 
-    print(f"\nembedding_map: {len(embedding_map)} entries")
+    print(f"embedding_map: {len(embedding_map)} entries")
     return embedding_map
 
 
-def score_all_conversations(embedding_map, V):
-    """
-    Score every conversation against every basis vector.
-        score[n, i] = diff_embedding[n] @ V[:, i]
+# ── Step 3: Group embeddings by user (format expected by solve_regularized_simplex) ──
 
+def group_by_user(train_data, test_data, device):
+    """Returns train_seen, train_unseen, test_seen, test_unseen as lists of tensors."""
+    def process(dataset, seen_value, split_name):
+        grouped = defaultdict(list)
+        for entry in dataset:
+            info = entry.get("extra_info", {})
+            if info.get("seen") == seen_value and info.get("split") == split_name:
+                user_id = info.get("user_id")
+                if user_id:
+                    chosen   = torch.tensor(info["chosen_conv_embedding"],   dtype=torch.float32, device=device)
+                    rejected = torch.tensor(info["rejected_conv_embedding"],  dtype=torch.float32, device=device)
+                    grouped[user_id].append(chosen - rejected)
+        result = []
+        for uid in sorted(grouped.keys()):
+            result.append(torch.stack(grouped[uid]))
+        return result
+
+    train_seen   = process(train_data, seen_value=True,  split_name="train")
+    train_unseen = process(train_data, seen_value=False, split_name="train")
+    test_seen    = process(test_data,  seen_value=True,  split_name="test")
+    test_unseen  = process(test_data,  seen_value=False, split_name="test")
+
+    print(f"  train_seen users:   {len(train_seen)}")
+    print(f"  train_unseen users: {len(train_unseen)}")
+    print(f"  test_seen users:    {len(test_seen)}")
+    print(f"  test_unseen users:  {len(test_unseen)}")
+    return train_seen, train_unseen, test_seen, test_unseen
+
+
+# ── Step 4: Extract V_sft from Skywork backbone ───────────────────────────────
+
+def get_v_sft(model_name, device):
+    print(f"\nLoading backbone {model_name} to extract V_sft ...")
+    rm = AutoModel.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+        device_map=device,
+        attn_implementation="eager",
+        num_labels=1,
+    )
+    last_linear = None
+    for _, module in rm.named_modules():
+        if isinstance(module, torch.nn.Linear):
+            last_linear = module
+    V_sft = last_linear.weight[:, 0].to(device).to(torch.float32).reshape(-1, 1)
+    print(f"  V_sft shape: {V_sft.shape}")
+    del rm  # free GPU memory
+    torch.cuda.empty_cache()
+    return V_sft
+
+
+# ── Step 5: Score all conversations against a basis V ─────────────────────────
+
+def score_all(embedding_map, V):
+    """
     Returns:
-        keys   : list of (user_id, dialog_id, turn_nb) in row order
-        scores : [N, K] float tensor
+        keys   : list of (user_id, dialog_id, turn_nb)
+        scores : [N, K] float tensor  (on CPU)
     """
-    K    = V.shape[1]
-    keys = list(embedding_map.keys())
-    N    = len(keys)
-
-    # stack all diff embeddings: [N, 4096]
-    diffs = torch.stack([embedding_map[k]["diff_embedding"] for k in keys])
-
-    # full score matrix: [N, K]
-    scores = diffs @ V
-
-    print(f"  Score matrix shape: {scores.shape}  ({N} conversations × {K} bases)")
-    for i in range(K):
-        col = scores[:, i]
-        print(f"  basis_{i:2d} | min: {col.min():.4f}  max: {col.max():.4f}"
-              f"  mean: {col.mean():.4f}  std: {col.std():.4f}")
-
+    keys  = list(embedding_map.keys())
+    diffs = torch.stack([embedding_map[k]["diff_embedding"] for k in keys])  # [N, 4096]
+    V_cpu = V.cpu().to(torch.float32)
+    scores = diffs @ V_cpu  # [N, K]
     return keys, scores
 
 
+# ── Main ──────────────────────────────────────────────────────────────────────
+
 def main():
-    #load embeddings
+    # 1. load embeddings
     train_data = load_pkl(TRAIN_PKL)
     test_data  = load_pkl(TEST_PKL)
 
-    #build lookup dict
+    # 2. build flat lookup dict
+    print("\nBuilding embedding map ...")
     embedding_map = build_embedding_map(train_data, test_data)
-
-    #save embedding map
     with open(OUT_MAP, "wb") as f:
         pickle.dump(embedding_map, f)
-    print(f"\nSaved embedding_map → {OUT_MAP}")
+    print(f"Saved embedding_map → {OUT_MAP}")
 
-    #load basis vectors
-    print(f"\nLoading basis matrices from {BASIS_PT} (run: {BASIS_RUN_KEY}) ...")
-    matrices = torch.load(BASIS_PT, map_location="cpu")
-    V = matrices[BASIS_RUN_KEY]["V"].to(torch.float32)  # [4096, K]
-    print(f"  V shape: {V.shape}")
+    # 3. group by user for LoRe training
+    print("\nGrouping embeddings by user ...")
+    train_seen, train_unseen, test_seen, test_unseen = group_by_user(
+        train_data, test_data, DEVICE
+    )
 
-    #score all conversations against all bases
-    print(f"\nScoring {len(embedding_map)} conversations against {V.shape[1]} bases ...")
-    keys, scores = score_all_conversations(embedding_map, V)
+    # 4. extract V_sft (backbone reward direction) — loaded once, shared across all runs
+    V_sft = get_v_sft(MODEL_NAME, DEVICE)
 
-    #save full score matrix
+    # 5. train LoRe bases for all (K, alpha) and score
+    all_scores = {}
+    total_runs = len(K_LIST) * len(ALPHA_LIST)
+    run_idx = 0
+
+    for alpha in ALPHA_LIST:
+        for K in K_LIST:
+            run_idx += 1
+            run_key = f"K{K}_alpha{alpha:.0e}"
+            print(f"\n{'='*60}")
+            print(f"[{run_idx}/{total_runs}] Training: K={K}, alpha={alpha:.0e}")
+            print(f"{'='*60}")
+
+            # seed immediately before each solve so each run is independently reproducible
+            set_seed(SEED)
+
+            if K == 0:
+                V_joint = V_sft
+            else:
+                _, V_joint = solve_regularized_simplex(
+                    V_sft, alpha, train_seen, K,
+                    num_iterations=NUM_ITERS,
+                    learning_rate=LR
+                )
+
+            V_joint = V_joint.detach().cpu().to(torch.float32)
+            print(f"  V_joint shape: {V_joint.shape}")
+
+            # score all conversations
+            keys, scores = score_all(embedding_map, V_joint)
+            print(f"  Score matrix: {scores.shape}")
+            for i in range(scores.shape[1]):
+                col = scores[:, i]
+                print(f"    basis_{i:2d} | min={col.min():.4f} max={col.max():.4f} "
+                      f"mean={col.mean():.4f} std={col.std():.4f}")
+
+            all_scores[run_key] = {
+                "keys":   keys,
+                "scores": scores,
+                "V":      V_joint,
+                "K":      K,
+                "alpha":  alpha,
+            }
+
+    # 6. save all scores
     with open(OUT_SCORES, "wb") as f:
-        pickle.dump({
-            "keys":   keys,    # list of (user_id, dialog_id, turn_nb)
-            "scores": scores,  # [N, K] tensor
-            "V":      V,       # [4096, K] basis matrix
-        }, f)
+        pickle.dump(all_scores, f)
     print(f"\nSaved basis_scores → {OUT_SCORES}")
-    print(f"  keys:   list of {len(keys)} (user_id, dialog_id, turn_nb) tuples")
-    print(f"  scores: {scores.shape} tensor — every conversation × every basis")
-    print(f"  V:      {V.shape} basis matrix")
+
+    # 7. summary
+    print("\n" + "="*60)
+    print("SUMMARY")
+    print("="*60)
+    for run_key, data in all_scores.items():
+        print(f"  {run_key:25s}: scores {data['scores'].shape}, V {data['V'].shape}")
+
+    print("\nDone. Copy to your Mac:")
+    print(f"  scp -i ~/.ssh/lore_key -P 20479 "
+          f"root@38.64.63.84:/workspace/LoRe-BasisInterp/PRISM/{OUT_MAP} ~/Desktop/lore_outputs/")
+    print(f"  scp -i ~/.ssh/lore_key -P 20479 "
+          f"root@38.64.63.84:/workspace/LoRe-BasisInterp/PRISM/{OUT_SCORES} ~/Desktop/lore_outputs/")
+
 
 if __name__ == "__main__":
     main()
