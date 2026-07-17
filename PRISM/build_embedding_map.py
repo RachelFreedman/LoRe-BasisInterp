@@ -8,8 +8,6 @@ build_embedding_map.py
 4. Scores all N conversations against all K basis vectors for every (K, alpha) run
 5. Saves basis_scores.pkl: nested dict keyed by "K{K}_alpha{alpha}"
 
-Does NOT rely on basis_matrices.pt — trains fresh bases from the embeddings.
-
 Usage (run from PRISM/ directory on GPU cluster):
     python build_embedding_map.py
 
@@ -59,7 +57,7 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils import solve_regularized_simplex, set_seed
 
 
-# ── Step 1: Load embeddings ───────────────────────────────────────────────────
+# Load embeddings
 
 def load_pkl(path):
     print(f"Loading {path} ...")
@@ -68,7 +66,7 @@ def load_pkl(path):
     return data
 
 
-# ── Step 2: Build flat embedding map ─────────────────────────────────────────
+# Build flat embedding map 
 
 def build_embedding_map(train_data, test_data):
     """
@@ -112,7 +110,7 @@ def build_embedding_map(train_data, test_data):
     return embedding_map
 
 
-# ── Step 3: Group embeddings by user (format expected by solve_regularized_simplex) ──
+# Group embeddings by user 
 
 def group_by_user(train_data, test_data, device):
     """Returns train_seen, train_unseen, test_seen, test_unseen as lists of tensors."""
@@ -143,7 +141,7 @@ def group_by_user(train_data, test_data, device):
     return train_seen, train_unseen, test_seen, test_unseen
 
 
-# ── Step 4: Extract V_sft from Skywork backbone ───────────────────────────────
+# Extract V_sft from Skywork backbone 
 
 def get_v_sft(model_name, device):
     print(f"\nLoading backbone {model_name} to extract V_sft ...")
@@ -165,7 +163,7 @@ def get_v_sft(model_name, device):
     return V_sft
 
 
-# ── Step 5: Score all conversations against a basis V ─────────────────────────
+# Score all conversations against a basis V 
 
 def score_all(embedding_map, V):
     """
@@ -180,30 +178,28 @@ def score_all(embedding_map, V):
     return keys, scores
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
-    # 1. load embeddings
+    # load embeddings
     train_data = load_pkl(TRAIN_PKL)
     test_data  = load_pkl(TEST_PKL)
 
-    # 2. build flat lookup dict
+    # build flat lookup dict
     print("\nBuilding embedding map ...")
     embedding_map = build_embedding_map(train_data, test_data)
     with open(OUT_MAP, "wb") as f:
         pickle.dump(embedding_map, f)
     print(f"Saved embedding_map → {OUT_MAP}")
 
-    # 3. group by user for LoRe training
+    # group by user for LoRe training
     print("\nGrouping embeddings by user ...")
     train_seen, train_unseen, test_seen, test_unseen = group_by_user(
         train_data, test_data, DEVICE
     )
 
-    # 4. extract V_sft (backbone reward direction) — loaded once, shared across all runs
+    # extract V_sft (backbone reward direction) — loaded once, shared across all runs
     V_sft = get_v_sft(MODEL_NAME, DEVICE)
 
-    # 5. train LoRe bases for all (K, alpha) and score
+    # train LoRe bases for all (K, alpha) and score
     all_scores = {}
     total_runs = len(K_LIST) * len(ALPHA_LIST)
     run_idx = 0
@@ -216,7 +212,6 @@ def main():
             print(f"[{run_idx}/{total_runs}] Training: K={K}, alpha={alpha:.0e}")
             print(f"{'='*60}")
 
-            # seed immediately before each solve so each run is independently reproducible
             set_seed(SEED)
 
             if K == 0:
@@ -247,7 +242,6 @@ def main():
                 "alpha":  alpha,
             }
 
-    # 6. save all scores
     with open(OUT_SCORES, "wb") as f:
         pickle.dump(all_scores, f)
     print(f"\nSaved basis_scores → {OUT_SCORES}")
@@ -258,12 +252,6 @@ def main():
     print("="*60)
     for run_key, data in all_scores.items():
         print(f"  {run_key:25s}: scores {data['scores'].shape}, V {data['V'].shape}")
-
-    print("\nDone. Copy to your Mac:")
-    print(f"  scp -i ~/.ssh/lore_key -P 20479 "
-          f"root@38.64.63.84:/workspace/LoRe-BasisInterp/PRISM/{OUT_MAP} ~/Desktop/lore_outputs/")
-    print(f"  scp -i ~/.ssh/lore_key -P 20479 "
-          f"root@38.64.63.84:/workspace/LoRe-BasisInterp/PRISM/{OUT_SCORES} ~/Desktop/lore_outputs/")
 
 
 if __name__ == "__main__":
