@@ -72,7 +72,7 @@ class TopKSAE(nn.Module):
         self.b_pre.copy_(mean.detach().to(self.b_pre.dtype).to(self.b_pre.device))
 
     def encode_pre_acts(self, x: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x - self.b_pre)
+        return self.encoder(x - self.b_pre) # z_raw = Wx - b_pre
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         pre_acts = self.encode_pre_acts(x)
