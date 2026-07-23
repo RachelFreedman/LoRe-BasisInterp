@@ -53,7 +53,7 @@ N_unseen = len(train_unseen)
 print(N)
 print(N_unseen)
 
-from transformers import AutoModel
+from transformers import AutoModel, set_seed
 
 model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
 rm = AutoModel.from_pretrained(
