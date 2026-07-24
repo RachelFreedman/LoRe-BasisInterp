@@ -38,4 +38,4 @@ def test_dry_run_prints_prompt_and_plan(capsys, tmp_path):
     assert "DRY RUN" in out
     assert "sample__claude__judgments.csv" in out
     assert "<answer_a>\nAA\n</answer_a>" in out  # rendered prompt for the first item
-    assert "set version v1" in out
+    assert "set version v3" in out

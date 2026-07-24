@@ -30,39 +30,52 @@ def _run(provider, items, **over):
 
 
 def test_swap_math_final_and_disagreement():
-    # forward: slot-B (answer_b) scored 0.8; reverse: slot-B (answer_a) scored 0.1
+    # forward: slot-B judged to exhibit more ("B" -> 1.0); reverse: a genuine tie (0.5).
     def responder(system, user, temperature):
         if _is_forward(user):
-            return json.dumps({"helpfulness": 0.8, "fluency": 0.5})
-        return json.dumps({"helpfulness": 0.1, "fluency": 0.5})
+            return json.dumps({"helpfulness": "B", "fluency": "tie"})
+        return json.dumps({"helpfulness": "tie", "fluency": "tie"})
 
     items = [InputItem(id="x", prompt="q", answer_a="A", answer_b="B")]
     r = _run(FakeProvider(responder=responder), items)[0]
 
-    # fwd_b=0.8, rev_b=1-0.1=0.9 -> final=0.85, disagreement=0.1
-    assert math.isclose(r.final["helpfulness"], 0.85)
-    assert math.isclose(r.disagreement["helpfulness"], 0.1, abs_tol=1e-9)
-    # fluency symmetric: fwd_b=0.5, rev_b=0.5 -> final 0.5, no disagreement
+    # fwd_b=1.0, rev_b=1-0.5=0.5 -> final=0.75, disagreement=0.5
+    assert math.isclose(r.final["helpfulness"], 0.75)
+    assert math.isclose(r.disagreement["helpfulness"], 0.5, abs_tol=1e-9)
+    # fluency symmetric tie: fwd_b=0.5, rev_b=0.5 -> final 0.5, no disagreement
     assert math.isclose(r.final["fluency"], 0.5)
     assert math.isclose(r.disagreement["fluency"], 0.0, abs_tol=1e-9)
 
 
 def test_perfectly_consistent_judge_has_zero_disagreement():
     def responder(system, user, temperature):
-        # answer_b consistently exhibits more: forward 0.9, reverse (b in slot A) 0.1
-        val = 0.9 if _is_forward(user) else 0.1
-        return json.dumps({"helpfulness": val, "fluency": val})
+        # answer_b consistently exhibits more: forward names slot-B ("B"),
+        # reverse names slot-A ("A", since answer_b now sits in slot A).
+        verdict = "B" if _is_forward(user) else "A"
+        return json.dumps({"helpfulness": verdict, "fluency": verdict})
 
     items = [InputItem(id="x", prompt="q", answer_a="A", answer_b="B")]
     r = _run(FakeProvider(responder=responder), items)[0]
-    assert math.isclose(r.final["helpfulness"], 0.9)
+    assert math.isclose(r.final["helpfulness"], 1.0)
     assert math.isclose(r.disagreement["helpfulness"], 0.0, abs_tol=1e-9)
+
+
+def test_position_flip_yields_max_disagreement():
+    # Judge names the SAME SLOT ("B") in both orders -> pure position bias, no content
+    # signal. The fold masks it to a 0.5 "tie" while disagreement maxes at 1.0.
+    def responder(system, user, temperature):
+        return json.dumps({"helpfulness": "B", "fluency": "B"})
+
+    items = [InputItem(id="x", prompt="q", answer_a="A", answer_b="B")]
+    r = _run(FakeProvider(responder=responder), items)[0]
+    assert math.isclose(r.final["helpfulness"], 0.5)
+    assert math.isclose(r.disagreement["helpfulness"], 1.0, abs_tol=1e-9)
 
 
 def test_parse_failure_yields_nan_for_all_concepts():
     def responder(system, user, temperature):
         if _is_forward(user):
-            return json.dumps({"helpfulness": 0.5, "fluency": 0.5})
+            return json.dumps({"helpfulness": "tie", "fluency": "tie"})
         return "I won't answer."
 
     items = [InputItem(id="x", prompt="q", answer_a="A", answer_b="B")]
@@ -104,7 +117,7 @@ def test_cache_hit_skips_second_provider_call(tmp_path):
 
     def responder(system, user, temperature):
         calls["n"] += 1
-        return json.dumps({"helpfulness": 0.5, "fluency": 0.5})
+        return json.dumps({"helpfulness": "tie", "fluency": "tie"})
 
     items = [InputItem(id="x", prompt="q", answer_a="A", answer_b="B")]
     cache = Cache(tmp_path)

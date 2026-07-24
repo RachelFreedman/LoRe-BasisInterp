@@ -1,9 +1,9 @@
 """Offline judge for tests and dry runs. No network, fully deterministic.
 
-By default it returns a well-formed JSON object scoring every requested concept at
-0.5 (the "equivalent" anchor), so the parsing and ordering paths can be exercised
-without an API key. Tests can inject scripted responses or a per-call delay to
-provoke out-of-order completion under concurrency.
+By default it returns a well-formed JSON object voting "tie" on every requested
+concept (which maps to 0.5, the "equivalent" score), so the parsing and ordering
+paths can be exercised without an API key. Tests can inject scripted responses or a
+per-call delay to provoke out-of-order completion under concurrency.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class FakeProvider:
         Reported verbatim as ``model_id``.
     responder:
         Optional ``(system, user, temperature) -> str`` returning the raw text to
-        emit. When omitted, returns a valid all-0.5 object over the prompt's keys.
+        emit. When omitted, returns a valid all-"tie" object over the prompt's keys.
     delay:
         Seconds to sleep before returning, to force out-of-order completion in
         concurrency tests.
@@ -72,4 +72,4 @@ class FakeProvider:
         if self._responder is not None:
             return JudgeResponse(text=self._responder(system, user, temperature))
         keys = _keys_from_prompt(user)
-        return JudgeResponse(text=json.dumps({k: 0.5 for k in keys}))
+        return JudgeResponse(text=json.dumps({k: "tie" for k in keys}))

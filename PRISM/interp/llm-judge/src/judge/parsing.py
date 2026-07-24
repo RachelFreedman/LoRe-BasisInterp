@@ -1,10 +1,15 @@
 """Defensive parsing of a judge model's raw text into per-concept scores.
 
-Models are told to emit a bare JSON object, but they misbehave: markdown fences,
-leading prose, a refusal, a trailing comma. We try hard to recover a valid object
-without ever *guessing* a score -- if a concept is missing or out of range we fail
-the parse rather than invent a number. No clamping: an out-of-range value is a bug
-in the model's output, and silently squashing it to [0, 1] would hide that.
+Models are told to emit a bare JSON object mapping each concept to a discrete verdict
+-- "A", "B", or "tie" -- but they misbehave: markdown fences, leading prose, a refusal,
+a trailing comma. We try hard to recover a valid object without ever *guessing* a
+verdict -- if a concept is missing or its value is not one of the three tokens we fail
+the parse rather than invent one.
+
+The verdict is discrete on purpose: a numeric 0-to-1 scale invited the model to read the
+endpoints as an intensity ("1.0 = very confident") rather than a direction ("1.0 = B"),
+which flipped scores under position swap. A/B/tie has no magnitude reading. We map
+A -> 0.0, B -> 1.0, tie -> 0.5 so downstream folding/averaging is unchanged.
 """
 
 from __future__ import annotations
@@ -41,6 +46,10 @@ _REFUSAL_MARKERS = (
     "i won't",
     "i will not",
 )
+
+# The three allowed verdict tokens, mapped to the directional score the rest of the
+# pipeline expects. Matched case-insensitively after stripping surrounding whitespace.
+_VERDICT_MAP = {"a": 0.0, "b": 1.0, "tie": 0.5}
 
 
 def _iter_json_spans(text: str):
@@ -83,13 +92,19 @@ def _iter_json_spans(text: str):
         i = j + 1
 
 
-def _load_object(raw_text: str) -> dict | None:
-    """Best-effort recovery of a JSON object from possibly-noisy model text."""
+def _iter_objects(raw_text: str):
+    """Yield every JSON dict recoverable from ``raw_text``, left to right.
+
+    The whole string is tried first (the clean case), then each balanced ``{...}``
+    span. When the judge reasons before answering, its reply holds prose and possibly
+    stray braces followed by the real verdict object, so callers pick among these
+    candidates rather than trusting the first hit.
+    """
     stripped = raw_text.strip()
     try:
         obj = json.loads(stripped)
         if isinstance(obj, dict):
-            return obj
+            yield obj
     except json.JSONDecodeError:
         pass
 
@@ -99,24 +114,35 @@ def _load_object(raw_text: str) -> dict | None:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict):
-            return obj
-    return None
+            yield obj
 
 
 def parse_scores(raw_text: str, concept_keys: tuple[str, ...]) -> ParseResult:
     """Parse ``raw_text`` into a score for every key in ``concept_keys``.
 
-    Success requires exactly the expected keys to be present with numeric values in
-    [0, 1]. Extra keys are ignored (with a note); missing keys, non-numeric values,
-    booleans, or out-of-range numbers are validation errors. If no JSON object can be
-    recovered, an empty/refusal-looking response maps to REFUSAL, otherwise PARSE_ERROR.
+    Success requires exactly the expected keys to be present, each mapped to a verdict
+    token -- "A", "B", or "tie" (case-insensitive) -- which becomes 0.0 / 1.0 / 0.5.
+    Extra keys are ignored (with a note); missing keys or values that are not one of the
+    three tokens are validation errors. If no JSON object can be recovered, an
+    empty/refusal-looking response maps to REFUSAL, otherwise PARSE_ERROR.
+
+    The judge reasons before it answers, so the reply can contain several ``{...}``
+    fragments. We take the LAST object that carries every expected key as the verdict;
+    if none does, the last object seen drives a precise missing-keys error.
     """
-    obj = _load_object(raw_text)
-    if obj is None:
+    candidates = list(_iter_objects(raw_text))
+    if not candidates:
         lowered = raw_text.lower()
         if any(marker in lowered for marker in _REFUSAL_MARKERS):
             return ParseResult(Status.REFUSAL, None, "model refused to answer")
         return ParseResult(Status.PARSE_ERROR, None, "no JSON object found in response")
+
+    obj = None
+    for cand in candidates:
+        if all(k in cand for k in concept_keys):
+            obj = cand  # keep going: the verdict is the last complete object
+    if obj is None:
+        obj = candidates[-1]
 
     missing = [k for k in concept_keys if k not in obj]
     if missing:
@@ -127,16 +153,18 @@ def parse_scores(raw_text: str, concept_keys: tuple[str, ...]) -> ParseResult:
     scores: dict[str, float] = {}
     for k in concept_keys:
         v = obj[k]
-        if isinstance(v, bool) or not isinstance(v, (int, float)):
+        if not isinstance(v, str):
             return ParseResult(
-                Status.VALIDATION_ERROR, None, f"value for '{k}' is not a number: {v!r}"
+                Status.VALIDATION_ERROR, None, f"verdict for '{k}' is not a string: {v!r}"
             )
-        f = float(v)
-        if not (0.0 <= f <= 1.0):
+        token = v.strip().lower()
+        if token not in _VERDICT_MAP:
             return ParseResult(
-                Status.VALIDATION_ERROR, None, f"value for '{k}' out of range [0, 1]: {f}"
+                Status.VALIDATION_ERROR,
+                None,
+                f"verdict for '{k}' is not one of A/B/tie: {v!r}",
             )
-        scores[k] = f
+        scores[k] = _VERDICT_MAP[token]
 
     extra = [k for k in obj if k not in concept_keys]
     detail = f"ignored extra keys: {', '.join(extra)}" if extra else ""

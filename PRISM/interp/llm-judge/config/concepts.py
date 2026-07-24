@@ -99,4 +99,4 @@ CONCEPTS: list[Concept] = [
     ),
 ]
 
-CONCEPT_SET_VERSION = "v1"  # bump when CONCEPTS changes; participates in the cache key
+CONCEPT_SET_VERSION = "v3"  # bump when CONCEPTS or the judge prompt changes; part of the cache key

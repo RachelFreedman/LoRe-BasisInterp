@@ -34,10 +34,10 @@ def test_default_response_is_parseable_all_half():
 
 def test_scripted_responder_is_used():
     p = _prompt()
-    fake = FakeProvider(responder=lambda s, u, t: '{"helpfulness": 0.1, "fluency": 0.9}')
+    fake = FakeProvider(responder=lambda s, u, t: '{"helpfulness": "A", "fluency": "B"}')
     resp = fake.complete(p.system, p.user, 0.0)
     parsed = parse_scores(resp.text, p.concept_keys)
-    assert parsed.scores == {"helpfulness": 0.1, "fluency": 0.9}
+    assert parsed.scores == {"helpfulness": 0.0, "fluency": 1.0}
 
 
 def test_error_is_surfaced():

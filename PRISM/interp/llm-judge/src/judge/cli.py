@@ -37,13 +37,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         help=f"family aliases to run (default: {' '.join(DEFAULT_MODELS)})",
     )
     p.add_argument("--output-dir", type=Path, default=Path(DEFAULT_OUTPUT_DIR))
-    p.add_argument(
-        "--temperature",
-        type=float,
-        default=None,
-        help="sampling temperature; omitted from the request unless set "
-        "(some models reject the temperature parameter)",
-    )
     p.add_argument("--cache-dir", type=Path, default=Path(DEFAULT_CACHE_DIR))
     p.add_argument("--no-cache", action="store_true", help="ignore and do not write the cache")
     p.add_argument("--max-workers", type=int, default=8)
@@ -55,9 +48,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _resolve_models(aliases: list[str], *, allow_placeholder: bool) -> list[tuple[str, str, str]]:
-    """Map aliases to (alias, provider, model_id), rejecting unknown or unfilled ones."""
-    resolved: list[tuple[str, str, str]] = []
+def _resolve_models(
+    aliases: list[str], *, allow_placeholder: bool
+) -> list[tuple[str, str, str, float | None]]:
+    """Map aliases to (alias, provider, model_id, temperature), rejecting unknown ones."""
+    resolved: list[tuple[str, str, str, float | None]] = []
     for alias in aliases:
         spec = JUDGE_MODELS.get(alias)
         if spec is None:
@@ -69,7 +64,7 @@ def _resolve_models(aliases: list[str], *, allow_placeholder: bool) -> list[tupl
                 f"model alias {alias!r} has an unset model id in config/models.py; "
                 "set a concrete model id before a real run"
             )
-        resolved.append((alias, spec["provider"], spec["model_id"]))
+        resolved.append((alias, spec["provider"], spec["model_id"], spec.get("temperature")))
     return resolved
 
 
@@ -85,14 +80,13 @@ def _dry_run(args: argparse.Namespace) -> int:
     print("=== DRY RUN (no API calls) ===")
     print(f"input:            {args.input}  ({len(items)} items)")
     print(f"concepts:         {len(concepts)} (set version {CONCEPT_SET_VERSION})")
-    temp_shown = "model default (omitted)" if args.temperature is None else args.temperature
-    print(f"temperature:      {temp_shown}")
     print(f"cache:            {'disabled' if args.no_cache else args.cache_dir}")
     print("families & outputs:")
-    for alias, provider, model_id in models:
+    for alias, provider, model_id, alias_temp in models:
         shown = model_id if model_id != UNSET_MODEL_ID else f"{UNSET_MODEL_ID} (must set before real run)"
+        temp_shown = "omitted" if alias_temp is None else alias_temp
         paths = output_paths(args.output_dir, stem, alias)
-        print(f"  - {alias} [{provider}: {shown}]")
+        print(f"  - {alias} [{provider}: {shown}]  temperature={temp_shown}")
         print(f"      {paths.judgments.name}")
         print(f"      {paths.disagreement.name}")
         print(f"      {paths.raw.name}")
@@ -123,14 +117,20 @@ def _real_run(args: argparse.Namespace) -> int:
     stem = args.input.stem
     cache = Cache(args.cache_dir, enabled=not args.no_cache)
 
-    for alias, provider_name, model_id in models:
+    for alias, provider_name, model_id, alias_temp in models:
+        temperature = alias_temp
         provider = get_provider(provider_name, model_id)
-        print(f"[{alias}] judging {len(items)} items with {model_id} ...", flush=True)
+        temp_shown = "omitted" if temperature is None else temperature
+        print(
+            f"[{alias}] judging {len(items)} items with {model_id} "
+            f"(temperature={temp_shown}) ...",
+            flush=True,
+        )
         results = run_model(
             provider,
             items,
             concepts,
-            temperature=args.temperature,
+            temperature=temperature,
             concept_set_version=CONCEPT_SET_VERSION,
             cache=cache,
             max_workers=args.max_workers,
@@ -142,7 +142,7 @@ def _real_run(args: argparse.Namespace) -> int:
             results,
             concepts,
             model_id=model_id,
-            temperature=args.temperature,
+            temperature=temperature,
             concept_set_version=CONCEPT_SET_VERSION,
         )
         print(f"[{alias}] {_summarize(results)}")

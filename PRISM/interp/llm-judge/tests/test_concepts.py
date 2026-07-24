@@ -23,7 +23,7 @@ def test_shipped_config_is_valid():
     assert len(concepts) == 11
     assert concept_keys()[0] == "helpfulness"
     assert "verbosity" not in concept_keys()
-    assert CONCEPT_SET_VERSION == "v1"
+    assert CONCEPT_SET_VERSION == "v3"
 
 
 def test_empty_list_rejected():

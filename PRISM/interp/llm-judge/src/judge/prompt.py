@@ -14,14 +14,23 @@ from .concepts import Concept
 SYSTEM = (
     'You are an impartial evaluator comparing two AI assistant responses -- '
     '"Answer A" and "Answer B" -- to the same user prompt.\n\n'
-    "Your job: for each concept you are given, judge WHICH answer exhibits MORE of that "
-    "concept, on a 0-to-1 scale. This is a directional comparison between the two answers, "
-    "not a quality rating of either answer on its own.\n\n"
-    "Score every concept INDEPENDENTLY. Do not let an overall preference for one answer pull "
-    "its scores on unrelated concepts in the same direction. Answer A may exhibit more of one "
-    "concept while Answer B exhibits more of another.\n\n"
-    "Respond with a single JSON object and nothing else: no prose, no explanation, and no "
-    "markdown code fences."
+    "Your job: for each concept you are given, decide WHICH answer exhibits MORE of that "
+    'concept. Your verdict is one of exactly three choices -- "A", "B", or "tie" -- naming '
+    "the answer that shows more of the concept, or a genuine tie when neither clearly does. "
+    "This is a directional comparison between the two answers, not a quality rating of "
+    "either answer on its own.\n\n"
+    "Reason before you decide. First compare the two answers concept by concept, in a few "
+    "short sentences, deciding which one exhibits more of each and why. Only after that "
+    "reasoning do you commit to the verdicts.\n\n"
+    "Judge every concept INDEPENDENTLY. Do not let an overall preference for one answer pull "
+    "your verdicts on unrelated concepts in the same direction. Answer A may exhibit more of "
+    "one concept while Answer B exhibits more of another.\n\n"
+    "Judge the content only. The same pair may be shown to you in either order, so do NOT let "
+    "the position of an answer, its length, or any names or self-identification in the text "
+    "influence your verdicts. Be as objective as possible.\n\n"
+    "End your reply with a single JSON object as the very last thing -- each concept key "
+    'mapped to its verdict string ("A", "B", or "tie"). Put your reasoning before it, and '
+    "write nothing after it."
 )
 
 
@@ -42,7 +51,7 @@ def build_prompt(prompt: str, answer_a: str, answer_b: str, concepts: list[Conce
     Pass all concepts for a joint call, or a single-element list for --per-concept.
     """
     keys = tuple(c.key for c in concepts)
-    example = "{" + ", ".join(f'"{k}": 0.5' for k in keys) + "}"
+    example = "{" + ", ".join(f'"{k}": "tie"' for k in keys) + "}"
 
     user = (
         "<user_prompt>\n"
@@ -57,23 +66,23 @@ def build_prompt(prompt: str, answer_a: str, answer_b: str, concepts: list[Conce
         "<concepts>\n"
         f"{_render_concepts(concepts)}\n"
         "</concepts>\n\n"
-        "<scale>\n"
-        "For each concept, output a single number in [0, 1] indicating which answer exhibits "
+        "<verdict>\n"
+        "For each concept, choose exactly one of three verdicts naming which answer exhibits "
         "MORE of that concept:\n"
-        "  0.00 = Answer A exhibits it clearly more\n"
-        "  0.25 = Answer A exhibits it somewhat more\n"
-        "  0.50 = the two answers are equivalent on this concept\n"
-        "  0.75 = Answer B exhibits it somewhat more\n"
-        "  1.00 = Answer B exhibits it clearly more\n"
-        "Any value in [0, 1] is allowed; the anchors are guidance. This is about WHICH answer, "
-        "A or B, shows more of the concept -- not about how good either answer is.\n"
-        "</scale>\n\n"
+        '  "A"   = Answer A exhibits it more\n'
+        '  "B"   = Answer B exhibits it more\n'
+        '  "tie" = neither answer clearly exhibits it more\n'
+        "Use \"tie\" only for a genuine standoff, not as a way to avoid deciding. This is "
+        "about WHICH answer, A or B, shows more of the concept -- not about how good either "
+        "answer is.\n"
+        "</verdict>\n\n"
         "<output_format>\n"
-        "Return a single JSON object and nothing else -- no prose, no markdown code fences, no "
-        "explanation. It must contain every one of these keys, each mapped to a number in "
-        "[0, 1]:\n"
+        "First, write a brief concept-by-concept comparison -- one short line per concept is "
+        "plenty. Then, as the VERY LAST thing in your reply, output a single JSON object (no "
+        "markdown code fences, and nothing after it) containing every one of these keys, each "
+        'mapped to its verdict string ("A", "B", or "tie"):\n'
         f"{', '.join(keys)}\n"
-        "Example of the required shape (values are illustrative only):\n"
+        "Example of the required JSON shape (verdicts are illustrative only):\n"
         f"{example}\n"
         "</output_format>"
     )

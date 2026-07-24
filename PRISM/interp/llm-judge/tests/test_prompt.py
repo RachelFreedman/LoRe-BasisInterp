@@ -35,13 +35,14 @@ def test_every_concept_key_and_definition_rendered():
 def test_output_format_lists_all_keys_and_example():
     p = build_prompt("q", "a", "b", _concepts())
     assert "helpfulness, fluency" in p.user
-    assert '{"helpfulness": 0.5, "fluency": 0.5}' in p.user
+    assert '{"helpfulness": "tie", "fluency": "tie"}' in p.user
 
 
-def test_scale_is_directional_a_low_b_high():
+def test_verdict_is_directional_a_b_tie():
     p = build_prompt("q", "a", "b", _concepts())
-    assert "0.00 = Answer A exhibits it clearly more" in p.user
-    assert "1.00 = Answer B exhibits it clearly more" in p.user
+    assert '"A"   = Answer A exhibits it more' in p.user
+    assert '"B"   = Answer B exhibits it more' in p.user
+    assert '"tie" = neither answer clearly exhibits it more' in p.user
 
 
 def test_system_prompt_is_stable():
@@ -53,4 +54,4 @@ def test_system_prompt_is_stable():
 def test_single_concept_prompt():
     p = build_prompt("q", "a", "b", [_concepts()[0]])
     assert p.concept_keys == ("helpfulness",)
-    assert '{"helpfulness": 0.5}' in p.user
+    assert '{"helpfulness": "tie"}' in p.user
