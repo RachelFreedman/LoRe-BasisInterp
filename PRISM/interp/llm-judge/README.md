@@ -2,7 +2,7 @@
 
 Given a list of `(prompt, answer_a, answer_b)` triples, this tool asks one or more
 judge models, for each of several **concepts**, *which* answer exhibits that concept
-more — on a directional 0-to-1 scale. It is built for auditability and
+more — a discrete verdict of `A`, `B`, or `tie`. It is built for auditability and
 reproducibility: every judgment is position-debiased, cached by content, and written
 out with the raw model text so you can trace any number back to its source.
 
@@ -13,9 +13,12 @@ For each item and each judge family, the harness makes **two** calls:
 - **forward** — `answer_a` shown as "Answer A", `answer_b` as "Answer B"
 - **reverse** — the two answers swapped
 
-The judge returns, per concept, a number in `[0, 1]` where `0` = the slot-A answer
-exhibits the concept more and `1` = the slot-B answer does. We fold the two passes
-into the frame "how much does the original `answer_b` exhibit it":
+The judge returns, per concept, a verdict — `A`, `B`, or `tie` — which we map to `0`,
+`1`, and `0.5`: `0` = the slot-A answer exhibits the concept more, `1` = the slot-B
+answer does, `0.5` = a genuine tie. A discrete verdict is deliberate: a continuous
+`0`-to-`1` number let the judge read an endpoint as an intensity ("very confident")
+rather than a direction ("Answer B"), which flipped scores under the swap. We fold the
+two passes into the frame "how much does the original `answer_b` exhibit it":
 
 ```
 fwd_b = s_forward           # slot-B is answer_b
@@ -24,9 +27,13 @@ final        = (fwd_b + rev_b) / 2      # position-debiased score
 disagreement = |fwd_b - rev_b|          # how position-sensitive the judge was
 ```
 
-If either pass fails to produce a valid score (bad JSON, out-of-range value, refusal,
-API error), `final` and `disagreement` are `NaN` for every concept on that item — we
-never average a real score against a guess.
+If either pass fails to produce a valid score (bad JSON, an unrecognized verdict,
+refusal, API error), `final` and `disagreement` are `NaN` for every concept on that
+item — we never average a real score against a guess.
+
+Because verdicts are discrete, `disagreement` takes only three values: `0` (both
+orders agreed), `0.5` (a tie one way and a pick the other — mild), and `1.0` (the
+judge named the same slot both ways — a real position flip worth inspecting).
 
 ## Install
 
@@ -86,19 +93,33 @@ Preview the prompt and plan without calling any API:
 python -m judge data/contrastive_pairs_sample.json --dry-run
 ```
 
-Real run over all three families (one round each):
+Run all three families (Claude, Gemini, ChatGPT), one forward+reverse round each —
+this is the default when `--models` is omitted:
 
 ```
 python -m judge data/contrastive_pairs_sample.json
 ```
 
+Run a single family, or any subset, with `--models`:
+
+```
+python -m judge data/contrastive_pairs_sample.json --models claude
+python -m judge data/contrastive_pairs_sample.json --models claude gemini
+```
+
+The aliases are `claude`, `gemini`, and `chatgpt` (defined in `config/models.py`). You
+only need API keys for the families you actually run.
+
 Useful flags:
 
-- `--models claude gemini` — subset of families to run
-- `--temperature 0.0` — sampling temperature (default 0.0)
+- `--models claude gemini` — subset of families to run (default: all three)
 - `--output-dir outputs` — where artifacts go (default `outputs/`)
 - `--cache-dir .cache` / `--no-cache` — control the response cache
 - `--max-workers 8` — concurrency across items/orders
+
+Sampling temperature is not a CLI flag; it is set per family in `config/models.py`
+(`claude` and `chatgpt` omit it because those models reject the parameter, `gemini`
+pins `0.0`).
 
 ## Output
 
