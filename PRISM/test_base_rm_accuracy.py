@@ -90,14 +90,24 @@ def main():
         print(f"{name:>6} | {str(seen):>5} | {len(feats):>5} | {n:>6} | {m:.4f} +/- {s:.4f}")
 
     # Document the magnitude of the old bug: how (un)related was the broken anchor?
-    # cos(real head, collapsed LoRe direction) for the saved checkpoints, if present.
-    ckpt = os.path.join(SCRIPT_DIR, "..", "reproduced_matrices",
-                        "PRISM_V_lore_K_20_alpha_10000.0.pt")
-    if os.path.exists(ckpt):
-        V = torch.load(ckpt, map_location="cpu").float()
+    # cos(real head, collapsed LoRe direction) for the saved checkpoints, if present. The K
+    # matrices live in the parent-project reproduced_matrices/ (two levels up) or the in-repo
+    # checkpoints/checkpoints/; check both so this diagnostic actually runs when they exist.
+    ckpt_candidates = [
+        os.path.join(SCRIPT_DIR, "..", "..", "reproduced_matrices",
+                     "PRISM_V_lore_K_20_alpha_10000.0.pt"),
+        os.path.join(SCRIPT_DIR, "..", "checkpoints", "checkpoints",
+                     "PRISM_V_lore_K_20_alpha_10000.0.pt"),
+    ]
+    ckpt = next((p for p in ckpt_candidates if os.path.exists(p)), None)
+    if ckpt is not None:
+        V = torch.load(ckpt, map_location="cpu", weights_only=True).float()
         cos = F.cosine_similarity(V[:, 0], score_w.squeeze(), dim=0).item()
         print(f"\ncos(real reward head, collapsed LoRe K=20 direction) = {cos:+.4f} "
-              f"(~orthogonal: LoRe did NOT re-learn the real reward axis)")
+              f"(~orthogonal: LoRe did NOT re-learn the real reward axis)  [{ckpt}]")
+    else:
+        print("\n(skipped cos(head, LoRe) check: no PRISM_V_lore_K_20 checkpoint found in "
+              + " or ".join(ckpt_candidates) + ")")
 
 
 if __name__ == "__main__":
