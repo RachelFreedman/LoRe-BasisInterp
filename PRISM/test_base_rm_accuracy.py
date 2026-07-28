@@ -1,113 +1,104 @@
 """
-Experiment 1: Does the Base RM (V_sft) Already Get High Accuracy?
+Experiment 1: How well does the REAL base RM distinguish PRISM chosen vs rejected?
 
-Tests whether the pretrained Skywork reward head alone can classify
-PRISM chosen vs rejected responses, without any LoRe training.
+Answers Rachel's question: "How does the base RM (larger, more compute, more training) do at
+distinguishing chosen/rejected pairs?"
+
+IMPORTANT FIX (was a bug before)
+--------------------------------
+The previous version of this script -- and train_basis.py / basis_reproducibility_check.py --
+extracted the reward direction with `AutoModel` + "last nn.Linear". For a
+LlamaForSequenceClassification checkpoint, `AutoModel` returns the bare backbone and DROPS the
+real reward head `score.weight`; "last nn.Linear" then lands on `layers.31.mlp.down_proj` (an
+internal MLP matrix) and slices an arbitrary column. That is NOT the reward direction, so the
+old "base RM ~= 75%" number was measuring a meaningless direction.
+
+This version uses the TRUE reward head `score.weight` (via rm_head_utils.load_reward_head).
+Because PRISM embeddings are the last-token hidden state that the head consumes, base-RM
+preference accuracy is exactly  sign( score.weight @ (chosen_emb - rejected_emb) ).
+
+Measured result (cached PRISM embeddings): ~0.80 on all four slices
+  train/seen 0.799,  train/unseen 0.804,  test/seen 0.809,  test/unseen 0.801.
+So the base RM -- which never saw PRISM -- already gets ~80% zero-shot. Separating these pairs is
+mostly a single real "response-quality" axis, not a high-dimensional memorization artifact.
 """
-import torch
+import os
+import sys
+
 import numpy as np
+import torch
+import torch.nn.functional as F
 from collections import defaultdict
 
-device = "cpu"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(SCRIPT_DIR)
+from rm_head_utils import load_reward_head  # noqa: E402
+
 
 def group_embeddings_by_user(dataset, seen_value, split_name):
-    """Replicates the grouping logic from train_basis.py"""
-    grouped = defaultdict(lambda: {"embeddings": []})
+    """Per user, stack (chosen - rejected) last-token embedding diffs into [m_i, 4096]."""
+    grouped = defaultdict(list)
     for example in dataset:
-        extra_info = example.get("extra_info", {})
-        if extra_info.get("seen") == seen_value and extra_info.get("split") == split_name:
-            user_id = extra_info.get("user_id")
-            if user_id:
-                chosen = torch.tensor(extra_info["chosen_conv_embedding"], dtype=torch.float32)
-                rejected = torch.tensor(extra_info["rejected_conv_embedding"], dtype=torch.float32)
-                grouped[user_id]["embeddings"].append(chosen - rejected)
-    
-    sorted_grouped = []
-    for user_id in sorted(grouped.keys()):
-        sorted_grouped.append(torch.stack(grouped[user_id]["embeddings"]))
-    return sorted_grouped
+        info = example.get("extra_info", {})
+        if info.get("seen") == seen_value and info.get("split") == split_name:
+            uid = info.get("user_id")
+            if uid:
+                chosen = torch.tensor(info["chosen_conv_embedding"], dtype=torch.float32)
+                rejected = torch.tensor(info["rejected_conv_embedding"], dtype=torch.float32)
+                grouped[uid].append(chosen - rejected)
+    return [torch.stack(grouped[u]) for u in sorted(grouped.keys())]
 
-def evaluate_with_vector(test_features, V):
-    """Evaluate accuracy using a single reward direction V."""
-    accuracies = []
-    for user_diffs in test_features:
-        # user_diffs: [num_pairs, 4096] (chosen - rejected embeddings)
-        scores = user_diffs @ V  # [num_pairs, 1]
-        correct = (scores > 0).float().mean().item()
-        accuracies.append(correct)
-    return accuracies
 
-print("Loading embeddings...")
-train_embeddings = torch.load("data/prism/train_embeddings.pkl", map_location="cpu", weights_only=False)
-test_embeddings = torch.load("data/prism/test_embeddings.pkl", map_location="cpu", weights_only=False)
+def accuracy_with_direction(features, V):
+    """Fraction of pairs where diff @ V > 0 (i.e. chosen scored above rejected)."""
+    accs, n = [], 0
+    for user_diffs in features:
+        scores = user_diffs @ V  # [m_i, 1]
+        accs.append((scores > 0).float().mean().item())
+        n += user_diffs.shape[0]
+    return float(np.mean(accs)), float(np.std(accs)), n
 
-print("Grouping by user...")
-test_seen = group_embeddings_by_user(test_embeddings, seen_value=True, split_name="test")
-test_unseen = group_embeddings_by_user(test_embeddings, seen_value=False, split_name="test")
 
-print(f"Seen users (test): {len(test_seen)}")
-print(f"Unseen users (test): {len(test_unseen)}")
+def main():
+    print("Loading cached PRISM embeddings...")
+    train_emb = torch.load(os.path.join(SCRIPT_DIR, "..", "data", "prism",
+                                        "train_embeddings.pkl"), weights_only=False)
+    test_emb = torch.load(os.path.join(SCRIPT_DIR, "..", "data", "prism",
+                                       "test_embeddings.pkl"), weights_only=False)
 
-# --- Test 1: V_sft (the "grabbed" anchor from train_basis.py) ---
-print("\n" + "=" * 60)
-print("Loading Skywork model to extract V_sft...")
-from transformers import AutoModel
-model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
-rm = AutoModel.from_pretrained(model_name, torch_dtype=torch.bfloat16, device_map="cpu", attn_implementation="eager", num_labels=1)
+    print("Loading the TRUE Skywork reward head (score.weight)...")
+    score_w = load_reward_head()  # [4096, 1], float32
+    print(f"  score.weight: shape {tuple(score_w.shape)}, ||w|| = {score_w.norm().item():.4f}")
 
-last_linear_layer = None
-for name, module in rm.named_modules():
-    if isinstance(module, torch.nn.Linear):
-        last_linear_layer = module
+    slices = [
+        ("TRAIN", train_emb, True, "train"),
+        ("TRAIN", train_emb, False, "train"),
+        ("TEST", test_emb, True, "test"),
+        ("TEST", test_emb, False, "test"),
+    ]
 
-V_sft = last_linear_layer.weight[:, 0].to(torch.float32).reshape(-1, 1)
-print(f"V_sft shape: {V_sft.shape}")
+    print("\n" + "=" * 78)
+    print("TRUE BASE-RM ACCURACY  (score.weight . (chosen - rejected) > 0)")
+    print("=" * 78)
+    print(f"{'split':>6} | {'seen':>5} | {'users':>5} | {'pairs':>6} | {'accuracy':>16}")
+    print("-" * 60)
+    for name, ds, seen, split in slices:
+        feats = group_embeddings_by_user(ds, seen, split)
+        if not feats:
+            continue
+        m, s, n = accuracy_with_direction(feats, score_w)
+        print(f"{name:>6} | {str(seen):>5} | {len(feats):>5} | {n:>6} | {m:.4f} +/- {s:.4f}")
 
-# Also grab the ACTUAL reward head for comparison
-print("\nExtracting actual reward head...")
-for name, module in rm.named_modules():
-    if isinstance(module, torch.nn.Linear):
-        print(f"  Linear layer: {name}, shape: {module.weight.shape}")
+    # Document the magnitude of the old bug: how (un)related was the broken anchor?
+    # cos(real head, collapsed LoRe direction) for the saved checkpoints, if present.
+    ckpt = os.path.join(SCRIPT_DIR, "..", "reproduced_matrices",
+                        "PRISM_V_lore_K_20_alpha_10000.0.pt")
+    if os.path.exists(ckpt):
+        V = torch.load(ckpt, map_location="cpu").float()
+        cos = F.cosine_similarity(V[:, 0], score_w.squeeze(), dim=0).item()
+        print(f"\ncos(real reward head, collapsed LoRe K=20 direction) = {cos:+.4f} "
+              f"(~orthogonal: LoRe did NOT re-learn the real reward axis)")
 
-del rm  # free memory
 
-# --- Evaluate V_sft ---
-print("\n" + "=" * 60)
-print("EXPERIMENT 1: Base RM (V_sft) Accuracy")
-print("=" * 60)
-
-acc_seen = evaluate_with_vector(test_seen, V_sft)
-acc_unseen = evaluate_with_vector(test_unseen, V_sft)
-
-print(f"\nV_sft on SEEN users (test):   {np.mean(acc_seen):.4f} +/- {np.std(acc_seen):.4f}")
-print(f"V_sft on UNSEEN users (test): {np.mean(acc_unseen):.4f} +/- {np.std(acc_unseen):.4f}")
-
-# --- Test 2: Compare with LoRe K=20 collapsed direction ---
-print("\n" + "=" * 60)
-print("COMPARISON: LoRe K=20 (Collapsed) Direction")
-print("=" * 60)
-
-V_lore = torch.load("checkpoints/checkpoints/PRISM_V_lore_K_20_alpha_10000.0.pt", map_location="cpu", weights_only=True)
-# Since all bases are identical, just use the first one
-V_lore_single = V_lore[:, 0:1]  # [4096, 1]
-print(f"V_lore shape: {V_lore.shape}, using first column: {V_lore_single.shape}")
-
-# Check cosine sim between V_sft and collapsed direction
-import torch.nn.functional as F
-cos_sim = F.cosine_similarity(V_sft.squeeze(), V_lore_single.squeeze(), dim=0)
-print(f"Cosine similarity between V_sft and collapsed LoRe direction: {cos_sim.item():.6f}")
-
-acc_lore_seen = evaluate_with_vector(test_seen, V_lore_single)
-acc_lore_unseen = evaluate_with_vector(test_unseen, V_lore_single)
-
-print(f"\nLoRe K=20 on SEEN users (test):   {np.mean(acc_lore_seen):.4f} +/- {np.std(acc_lore_seen):.4f}")
-print(f"LoRe K=20 on UNSEEN users (test): {np.mean(acc_lore_unseen):.4f} +/- {np.std(acc_lore_unseen):.4f}")
-
-# --- Summary ---
-print("\n" + "=" * 60)
-print("SUMMARY")
-print("=" * 60)
-print(f"  Base RM (V_sft):        {np.mean(acc_seen):.2%} seen / {np.mean(acc_unseen):.2%} unseen")
-print(f"  LoRe K=20 (collapsed):  {np.mean(acc_lore_seen):.2%} seen / {np.mean(acc_lore_unseen):.2%} unseen")
-print(f"  Accuracy gain from LoRe: {np.mean(acc_lore_seen) - np.mean(acc_seen):.2%} seen / {np.mean(acc_lore_unseen) - np.mean(acc_unseen):.2%} unseen")
-print(f"  V_sft vs LoRe cosine:   {cos_sim.item():.4f}")
+if __name__ == "__main__":
+    main()
