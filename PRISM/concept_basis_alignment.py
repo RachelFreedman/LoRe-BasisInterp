@@ -123,6 +123,6 @@ if __name__ == "__main__":
     # Point this to a specific checkpoint you want to evaluate
     run_alignment_analysis(
         concept_vectors_path="data/prism/concept_vectors.pt",
-        basis_matrix_path="checkpoints/checkpoints/PRISM_V_lore_K_10_alpha_10000.0.pt", # Defaulting to K=10
-        output_dir="results/K_10"
+        basis_matrix_path="checkpoints/checkpoints/PRISM_V_lore_K_50_alpha_10000.0.pt", # Defaulting to K=50
+        output_dir="results/K_50"
     )
