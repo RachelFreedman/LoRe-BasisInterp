@@ -34,7 +34,7 @@ volume = modal.Volume.from_name("lore-prism-data", create_if_missing=True)
 image = (
     modal.Image.debian_slim()
     .pip_install_from_requirements("requirements.txt")
-    .pip_install("accelerate>=0.26.0")
+    .pip_install("accelerate>=0.26.0", "ipython")  # prepare.py imports IPython for its excepthook
     .add_local_dir(".", remote_path="/workspace",
                    ignore=["**/*.pkl", "data/prism/*.pkl", ".git", "**/__pycache__"])
 )
