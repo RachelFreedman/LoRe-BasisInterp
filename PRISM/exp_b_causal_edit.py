@@ -1,7 +1,7 @@
 """
-Experiment B (for Rachel): causal probe of WHAT the PRISM preference direction tracks.
+Experiment B: causal probe of WHAT the PRISM preference direction tracks.
 
-Rachel's suggestion: "Can you manually edit individual rejected responses so that they score more
+Motivating suggestion: "Can you manually edit individual rejected responses so that they score more
 like chosen responses?" This turns the correlational E6 result into a causal one: if editing ONE
 attribute of a rejected response raises its projection onto the direction, the direction causally
 tracks that attribute.
@@ -20,7 +20,7 @@ Read-out:
   * If +factuality / +helpfulness move the score up most and +length_ctrl is ~0 -> the direction
     tracks genuine quality (a real result, not an artifact).
   * If +length_ctrl moves it as much as the quality edits -> it is largely a length artifact
-    (Rachel's concern confirmed).
+    (the length-artifact concern confirmed).
   * -sycophancy should move it DOWN if the direction really penalizes sycophancy (E6 cross-check).
 We report the same deltas for the true reward head, so we can see whether the PRISM direction and
 the general RM respond to the same edits.

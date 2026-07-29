@@ -2,7 +2,7 @@
 E3: Dimensionality ablation -- is a single direction good "because 4096-d is huge", or because
 the PRISM preference signal is genuinely low-dimensional?
 
-Rachel's pushback: "In a massive 4096-dimensional space, it's mathematically easy to find a single
+The concern being tested: "In a massive 4096-dimensional space, it's mathematically easy to find a single
 'lazy' global direction that separates 98% of these non-overlapping pairs. This doesn't match my
 intuition."
 

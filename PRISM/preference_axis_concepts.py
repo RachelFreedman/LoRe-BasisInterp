@@ -1,7 +1,7 @@
 """
 E6: What is the single PRISM preference axis actually made of?
 
-Rachel's open question: the strong shared "chosen-beats-rejected" direction might be a generic
+Open question: the strong shared "chosen-beats-rejected" direction might be a generic
 quality signal (rejected responses are just weaker) rather than personalization. If so, the axis
 should align with generic quality/style concepts (helpfulness, fluency, formatting), not with a
 spread of distinct personal-taste concepts.

@@ -15,7 +15,7 @@ linearly separable through the origin (Cover's theorem), so 100% train accuracy 
 guaranteed and proves nothing on its own. The property that separates "lazy memorization" from
 "real signal" is GENERALIZATION: memorized noise gives test ~50%; a real low-dimensional signal
 gives test ~ train. So every condition here reports TRAIN and held-out TEST, and we add a
-real-label control -- that contrast is the actual answer to Rachel.
+real-label control -- that contrast is the actual answer.
 
 Experiment A: memorization vs generalization (K=1)
   A1 random labels, alpha=0    -> expect train ~100%, TEST ~50%   (memorizes, does NOT generalize)

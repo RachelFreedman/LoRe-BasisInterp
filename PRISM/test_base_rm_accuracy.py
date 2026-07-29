@@ -1,7 +1,7 @@
 """
 Experiment 1: How well does the REAL base RM distinguish PRISM chosen vs rejected?
 
-Answers Rachel's question: "How does the base RM (larger, more compute, more training) do at
+Answers the question: "How does the base RM (larger, more compute, more training) do at
 distinguishing chosen/rejected pairs?"
 
 IMPORTANT FIX (was a bug before)

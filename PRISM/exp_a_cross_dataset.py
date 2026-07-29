@@ -1,8 +1,8 @@
 """
-Experiment A (for Rachel): does the PRISM preference direction separate chosen/rejected in OTHER
+Experiment A: does the PRISM preference direction separate chosen/rejected in OTHER
 preference datasets as well as in PRISM?
 
-Rachel's point: we showed a single direction separates PRISM, and characterized it only by cosine
+Motivation: we showed a single direction separates PRISM, and characterized it only by cosine
 to concept vectors (correlational). Cross-dataset transfer turns that into a testable claim:
   * If the direction is a REAL generic-quality axis -> it should transfer, i.e. score chosen>rejected
     on other datasets roughly as well as the true reward head does.
