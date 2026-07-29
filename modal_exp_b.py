@@ -30,7 +30,10 @@ image = (
         "boto3",            # Bedrock client for the LLM edits
         "tqdm",
     )
-    .add_local_dir(".", remote_path="/workspace")
+    # Exclude the ~500MB local embedding .pkls (and git/cache) from the mount -- neither
+    # experiment needs them (datasets come from HF; the probe direction is a tiny committed .pt).
+    .add_local_dir(".", remote_path="/workspace",
+                   ignore=["**/*.pkl", "data/prism/*.pkl", ".git", "**/__pycache__"])
 )
 
 
