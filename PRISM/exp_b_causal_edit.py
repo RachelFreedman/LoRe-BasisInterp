@@ -35,7 +35,6 @@ import sys
 
 import numpy as np
 import torch
-from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
@@ -83,16 +82,14 @@ EDITS = {
 
 
 def sample_prompts(n):
-    ds = load_dataset("HannahRoseKirk/prism-alignment", "pairwise", split="train")
-    out = []
-    for e in ds:
-        prompt = e.get("prompt") or e.get("instruction") or ""
-        rejected = e.get("worst_response") or e.get("rejected") or ""
-        if prompt and rejected:
-            out.append((prompt, rejected))
-        if len(out) >= n:
-            break
-    return out
+    # Real PRISM (prompt, rejected) pairs, pre-extracted from the embeddings into a small committed
+    # JSON. (The HF dataset has no "pairwise" config -- its configs are survey/conversations/
+    # utterances/metadata -- so we ship the pairs directly instead of reconstructing them here.)
+    import json
+    path = os.path.join(SCRIPT_DIR, "..", "data", "prism", "rejected_samples.json")
+    with open(path) as f:
+        data = json.load(f)
+    return [(d["prompt"], d["rejected"]) for d in data[:n]]
 
 
 def make_edit(rejected, instruction):
