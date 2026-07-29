@@ -338,7 +338,6 @@ def load_prism_comparisons(
 
                     # the single chosen response string
                     chosen_utterance = turn["chosen_utterance"][0]
-                    entry['extra_info']['chosen_utterance'] = chosen_utterance
 
                     # BUGFIX (string-vs-list formatting artifact): the original code stored the
                     # rejected side as the *list* turn["rejected_utterance"], while chosen was a
@@ -349,8 +348,13 @@ def load_prism_comparisons(
                     # model then separates chosen/rejected on that trivial formatting fingerprint,
                     # which is what makes every learned LoRe basis collapse to one direction. Store a
                     # single rejected string, matching chosen, so both sides are formatted identically.
-                    rejected_utterance = turn["rejected_utterance"][0]
-                    entry['extra_info']['rejected_utterance'] = rejected_utterance
+                    #
+                    # 151/12999 turns have an EMPTY rejected list (the buggy code embedded these as
+                    # the literal "[]", yet another artifact); they carry no valid rejected response,
+                    # so skip them -- only emit the keys when a real (chosen, rejected) pair exists.
+                    if len(turn["rejected_utterance"]) > 0:
+                        entry['extra_info']['chosen_utterance'] = chosen_utterance
+                        entry['extra_info']['rejected_utterance'] = turn["rejected_utterance"][0]
 
                 data.append(entry)
 
