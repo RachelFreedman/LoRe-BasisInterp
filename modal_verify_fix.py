@@ -48,14 +48,20 @@ image = (
     secrets=[modal.Secret.from_name("huggingface")],
 )
 def verify(regen: bool = True):
+    import shutil
     os.chdir("/workspace")
-    # Persist data on the volume so the regenerated embeddings survive and can be pulled later.
-    os.makedirs("/vol/data", exist_ok=True)
-    if not os.path.exists("data"):
-        os.symlink("/vol/data", "data")
+    # NOTE: the .add_local_dir(".") mount already creates /workspace/data (it ships the small
+    # data/prism JSON/PT files; only *.pkl are ignored). So we CANNOT symlink data -> /vol/data
+    # (the dir exists) and must NOT write embeddings into /workspace/data -- that is the container's
+    # ephemeral disk and is lost when the container exits. Instead persist the .pkl explicitly on
+    # the volume at /vol/prism_embeddings and copy them into place around the analysis steps.
+    VOL_PKL = "/vol/prism_embeddings"
+    os.makedirs(VOL_PKL, exist_ok=True)
+    os.makedirs("data/prism", exist_ok=True)
     os.makedirs("/root/.cache", exist_ok=True)
     if not os.path.exists("/root/.cache/huggingface"):
         os.symlink("/vol/huggingface_cache", "/root/.cache/huggingface")
+    pkls = ["train_embeddings.pkl", "test_embeddings.pkl"]
 
     if regen:
         print("\n[1/4] prepare.py  (regenerate FIXED parquet: rejected as a single string)", flush=True)
@@ -63,10 +69,18 @@ def verify(regen: bool = True):
 
         print("\n[2/4] generate-prism-embeddings.py  (regenerate FIXED embeddings)", flush=True)
         subprocess.run(["python", "PRISM/generate-prism-embeddings.py"], check=True)
-        volume.commit()  # persist the fixed .pkl before the (CPU) analysis steps
+        for p in pkls:  # persist to the volume so --no-regen can reuse them
+            shutil.copy(f"data/prism/{p}", f"{VOL_PKL}/{p}")
+        volume.commit()
+        print(f"  persisted embeddings to {VOL_PKL} on the volume", flush=True)
     else:
         print("\n[skip 1-2] reusing the FIXED embeddings already on the volume", flush=True)
         volume.reload()  # pick up the committed fixed .pkl from a previous run
+        for p in pkls:
+            if not os.path.exists(f"{VOL_PKL}/{p}"):
+                raise FileNotFoundError(
+                    f"{VOL_PKL}/{p} not on the volume -- run once WITHOUT --no-regen first.")
+            shutil.copy(f"{VOL_PKL}/{p}", f"data/prism/{p}")
 
     print("\n[3/4] multiseed_collapse.py  (collapse metrics + test acc, several seeds)", flush=True)
     subprocess.run(["python", "PRISM/multiseed_collapse.py"], check=True)
