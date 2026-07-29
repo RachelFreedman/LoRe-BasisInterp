@@ -149,7 +149,7 @@ all_feature_diff_test_unseen = simulate_population(reward_tensor_test, test_feat
 test_features_sparse_unseen = create_sparse_tensor(all_feature_diff_test_unseen, 1.0)
 
 
-K_list = [0. 1, 2, 3, 4, 5]
+K_list = [0, 1, 2, 3, 4, 5]
 # K_list = [0]
         #   15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
 alpha_list = [0]
