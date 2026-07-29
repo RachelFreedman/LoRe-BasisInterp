@@ -54,28 +54,33 @@ def dry_run_exp_b():
     timeout=86400,
     secrets=[modal.Secret.from_name("huggingface"), modal.Secret.from_name("aws")],
 )
-def run_exp_b(n: int):
+def run_exp_b(n: int, length_matched: bool):
     os.chdir("/workspace")
     os.makedirs("/root/.cache", exist_ok=True)
     if not os.path.exists("/root/.cache/huggingface"):
         os.symlink("/vol/huggingface_cache", "/root/.cache/huggingface")
 
-    subprocess.run(["python", "PRISM/exp_b_causal_edit.py", "--n", str(n)], check=True)
+    cmd = ["python", "PRISM/exp_b_causal_edit.py", "--n", str(n)]
+    if length_matched:
+        cmd.append("--length-matched")
+    subprocess.run(cmd, check=True)
 
-    out = "/workspace/results/causal_edit/exp_b_causal_edit.csv"
-    with open(out, "rb") as f:
-        return f.read()
+    fname = "exp_b_length_matched.csv" if length_matched else "exp_b_causal_edit.csv"
+    with open(f"/workspace/results/causal_edit/{fname}", "rb") as f:
+        return f.read(), fname
 
 
 @app.local_entrypoint()
-def main(n: int = 60, dry_run: bool = False):
+def main(n: int = 60, dry_run: bool = False, length_matched: bool = False):
     if dry_run:
         print("Validating Bedrock creds/region/model on Modal (CPU, one call)...")
         dry_run_exp_b.remote()
         return
-    print("Submitting Experiment B (causal edit probe) to Modal...")
-    csv_bytes = run_exp_b.remote(n)
+    label = "length-matched " if length_matched else ""
+    print(f"Submitting Experiment B ({label}causal edit probe) to Modal...")
+    csv_bytes, fname = run_exp_b.remote(n, length_matched)
     os.makedirs("results/causal_edit", exist_ok=True)
-    with open("results/causal_edit/exp_b_causal_edit.csv", "wb") as f:
+    with open(f"results/causal_edit/{fname}", "wb") as f:
         f.write(csv_bytes)
-    print("Synced results/causal_edit/exp_b_causal_edit.csv back to your machine.")
+    print(f"Synced results/causal_edit/{fname} back to your machine.")
+    print(csv_bytes.decode(errors="replace")[-800:])

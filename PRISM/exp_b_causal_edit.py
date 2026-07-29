@@ -80,6 +80,25 @@ EDITS = {
                     "response.",
 }
 
+# Length-matched variant (--length-matched): change ONE attribute while holding word count ~constant,
+# so the score change reflects the attribute rather than how much text the edit added. "neutral" is
+# the control -- a length-preserving paraphrase whose Delta should be ~0 (the noise floor of just
+# rewriting); the other edits are only trustworthy if neutral stays small.
+_LEN_RULE = ("Keep the word count within 10% of the original and keep the same overall length. "
+             "Return only the revised response, nothing else.")
+EDITS_LM = {
+    "neutral":      "Paraphrase the response, preserving its meaning, quality, tone, and formatting. "
+                    "Change nothing of substance. " + _LEN_RULE,
+    "+factuality":  "Revise to fix inaccurate/unverifiable claims and add correct factual detail, "
+                    "changing ONLY factual accuracy (same tone/formatting). " + _LEN_RULE,
+    "+helpfulness": "Revise so it directly and completely answers the request, changing ONLY how well "
+                    "it addresses the need (same tone/formatting). " + _LEN_RULE,
+    "+formatting":  "Add markdown structure (headers, bullet points, bold) by restructuring the "
+                    "EXISTING wording -- do NOT add new content or words. " + _LEN_RULE,
+    "-sycophancy":  "Add flattery of the user and agreement, but REMOVE an equal amount of other text "
+                    "so the length is unchanged; keep the same formatting. " + _LEN_RULE,
+}
+
 
 def sample_prompts(n):
     # Real PRISM (prompt, rejected) pairs, pre-extracted from the embeddings into a small committed
@@ -129,12 +148,20 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="make one Bedrock call to validate creds/region/model, then exit "
                          "(no Skywork load, no GPU work)")
-    ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results", "causal_edit",
-                                                  "exp_b_causal_edit.csv"))
+    ap.add_argument("--length-matched", action="store_true",
+                    help="use length-preserving single-attribute edits (+ a neutral paraphrase "
+                         "control) and log the edited/original word-count ratio")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     if args.dry_run:
         sys.exit(dry_run())
+
+    edits = EDITS_LM if args.length_matched else EDITS
+    out = args.out or os.path.join(SCRIPT_DIR, "..", "results", "causal_edit",
+                                   "exp_b_length_matched.csv" if args.length_matched
+                                   else "exp_b_causal_edit.csv")
+    wc = lambda s: len(s.split())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}. Loading Skywork backbone + directions...")
@@ -151,40 +178,47 @@ def main():
     samples = sample_prompts(args.n)
     print(f"{len(samples)} (prompt, rejected) samples")
 
-    # delta[edit][direction] -> list of per-sample score changes
-    deltas = {e: {"prism_meandiff": [], "true_head": []} for e in EDITS}
+    # per-edit: score deltas for each direction + edited/original word-count ratio
+    deltas = {e: {"prism_meandiff": [], "true_head": [], "len_ratio": []} for e in edits}
     import csv
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    f = open(args.out, "w", newline=""); w = csv.writer(f)
-    w.writerow(["sample", "edit", "direction", "score_orig", "score_edit", "delta"])
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    f = open(out, "w", newline=""); w = csv.writer(f)
+    w.writerow(["sample", "edit", "direction", "score_orig", "score_edit", "delta", "len_ratio"])
 
     for si, (prompt, rejected) in enumerate(tqdm(samples)):
         h0 = embed_one(model, tokenizer, prompt, rejected, device, args.max_length)
         s0 = proj(h0)
-        for edit, instr in EDITS.items():
+        for edit, instr in edits.items():
             edited = make_edit(rejected, instr)
             if not edited:
                 continue
+            lr = wc(edited) / max(wc(rejected), 1)
+            deltas[edit]["len_ratio"].append(lr)
             h1 = embed_one(model, tokenizer, prompt, edited, device, args.max_length)
             s1 = proj(h1)
             for d in ("prism_meandiff", "true_head"):
                 dl = s1[d] - s0[d]
                 deltas[edit][d].append(dl)
-                w.writerow([si, edit, d, round(s0[d], 4), round(s1[d], 4), round(dl, 4)])
+                w.writerow([si, edit, d, round(s0[d], 4), round(s1[d], 4), round(dl, 4), round(lr, 3)])
         f.flush()
     f.close()
 
-    print("\n=== mean score change per edit (higher = edit pushes rejected toward 'chosen') ===")
-    print(f"{'edit':>14} | {'prism_meandiff':>16} | {'true_head':>12}")
-    print("-" * 50)
-    for edit in EDITS:
-        mp = np.mean(deltas[edit]["prism_meandiff"]) if deltas[edit]["prism_meandiff"] else float("nan")
-        mh = np.mean(deltas[edit]["true_head"]) if deltas[edit]["true_head"] else float("nan")
-        print(f"{edit:>14} | {mp:>16.4f} | {mh:>12.4f}")
-    print("\nRead-out: quality edits (+factuality/+helpfulness) should raise the PRISM-direction score")
-    print("while +length_ctrl stays ~0 (=> real quality, not a length artifact); -sycophancy should")
-    print("lower it (E6 cross-check). Compare the two columns to see if the general RM agrees.")
-    print(f"\nSaved {args.out}")
+    mean = lambda xs: float(np.mean(xs)) if xs else float("nan")
+    print("\n=== mean score change per edit (higher = pushes rejected toward 'chosen') ===")
+    print(f"{'edit':>14} | {'prism_meandiff':>16} | {'true_head':>12} | {'len_ratio':>9}")
+    print("-" * 62)
+    for edit in edits:
+        print(f"{edit:>14} | {mean(deltas[edit]['prism_meandiff']):>16.4f} | "
+              f"{mean(deltas[edit]['true_head']):>12.4f} | {mean(deltas[edit]['len_ratio']):>9.2f}")
+    if args.length_matched:
+        print("\nRead-out (length-matched): len_ratio should be ~1.0 for every row (length held). "
+              "With length controlled, +factuality/+helpfulness up and -sycophancy down => the "
+              "direction tracks the ATTRIBUTE, not text length. Watch neutral (~0 = noise floor) "
+              "and +formatting (now isolates markup from length).")
+    else:
+        print("\nRead-out: +factuality/+helpfulness should raise the score, -sycophancy lower it; "
+              "but edits change text length too -- run --length-matched to isolate attribute from length.")
+    print(f"\nSaved {out}")
 
 
 if __name__ == "__main__":
