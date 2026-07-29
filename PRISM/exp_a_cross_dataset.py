@@ -134,7 +134,7 @@ def main():
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--lore_ckpt", default=os.path.join(SCRIPT_DIR, "..", "reproduced_matrices",
                                                         "PRISM_V_lore_K_20_alpha_10000.0.pt"))
-    ap.add_argument("--batch_size", type=int, default=8)
+    ap.add_argument("--batch_size", type=int, default=4)
     ap.add_argument("--max_length", type=int, default=2048)
     ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results", "cross_dataset",
                                                   "exp_a_cross_dataset.csv"))
@@ -143,34 +143,42 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}. Loading Skywork backbone...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
+    # sdpa (memory-efficient attention) instead of eager: eager materializes the full
+    # [B, H, T, T] fp32 attention matrix (~4GB at B=8,T=2048) and OOMs the A10G on long inputs.
     model = AutoModel.from_pretrained(MODEL, torch_dtype=torch.bfloat16,
-                                      attn_implementation="eager").to(device).eval()
+                                      attn_implementation="sdpa").to(device).eval()
     H, names = build_heads(args.lore_ckpt, device)
+    Hcpu = H.cpu()
     print(f"Directions under test: {names}")
 
+    # Write results incrementally per-dataset (and isolate failures) so one dataset OOMing
+    # never discards the datasets that already succeeded.
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     import csv
-    rows = []
+    f = open(args.out, "w", newline="")
+    w = csv.DictWriter(f, fieldnames=["dataset", "direction", "n_pairs", "accuracy"])
+    w.writeheader(); f.flush()
     for name in args.datasets:
         print(f"\n=== {name} ===")
-        pairs = load_pairs(name, args.limit)
-        print(f"{len(pairs)} pairs")
-        chosen_txt = [apply_template(tokenizer, p, c) for p, c, r in pairs]
-        reject_txt = [apply_template(tokenizer, p, r) for p, c, r in pairs]
-        hc = last_token_hidden(model, tokenizer, chosen_txt, device, args.max_length, args.batch_size)
-        hr = last_token_hidden(model, tokenizer, reject_txt, device, args.max_length, args.batch_size)
-        Hcpu = H.cpu()
-        sc = hc @ Hcpu                    # [N, n_heads]  chosen scores per direction
-        sr = hr @ Hcpu                    # [N, n_heads]  rejected scores per direction
-        acc = ((sc - sr) > 0).float().mean(0)   # per-direction pairwise accuracy
-        for j, dname in enumerate(names):
-            print(f"  {dname:16s}: acc = {acc[j].item():.4f}")
-            rows.append({"dataset": name, "direction": dname, "n_pairs": len(pairs),
-                         "accuracy": round(acc[j].item(), 4)})
-
-    with open(args.out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["dataset", "direction", "n_pairs", "accuracy"])
-        w.writeheader(); w.writerows(rows)
+        try:
+            pairs = load_pairs(name, args.limit)
+            print(f"{len(pairs)} pairs")
+            chosen_txt = [apply_template(tokenizer, p, c) for p, c, r in pairs]
+            reject_txt = [apply_template(tokenizer, p, r) for p, c, r in pairs]
+            hc = last_token_hidden(model, tokenizer, chosen_txt, device, args.max_length, args.batch_size)
+            hr = last_token_hidden(model, tokenizer, reject_txt, device, args.max_length, args.batch_size)
+            acc = ((hc @ Hcpu - hr @ Hcpu) > 0).float().mean(0)   # per-direction pairwise accuracy
+            for j, dname in enumerate(names):
+                print(f"  {dname:16s}: acc = {acc[j].item():.4f}")
+                w.writerow({"dataset": name, "direction": dname, "n_pairs": len(pairs),
+                            "accuracy": round(acc[j].item(), 4)})
+            f.flush()
+        except Exception as ex:
+            print(f"  [SKIP] {name} failed: {ex!r}")
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    f.close()
     print(f"\nSaved {args.out}")
     print("Read-out: if prism_meandiff tracks true_head across datasets -> real generic-quality axis;")
     print("if it collapses off PRISM while true_head holds -> PRISM-specific artifact.")

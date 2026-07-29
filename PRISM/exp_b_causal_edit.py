@@ -143,7 +143,7 @@ def main():
     print(f"Device: {device}. Loading Skywork backbone + directions...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
     model = AutoModel.from_pretrained(MODEL, torch_dtype=torch.bfloat16,
-                                      attn_implementation="eager").to(device).eval()
+                                      attn_implementation="sdpa").to(device).eval()  # memory-efficient
     v_prism = torch.load(os.path.join(SCRIPT_DIR, "..", "reproduced_matrices",
                                       "prism_mean_diff_direction.pt"), weights_only=True).reshape(-1)
     v_head = load_reward_head().reshape(-1)
