@@ -32,6 +32,7 @@ Usage:  python exp_b_causal_edit.py --n 60
 import argparse
 import os
 import sys
+import time
 
 import numpy as np
 import torch
@@ -111,8 +112,14 @@ def sample_prompts(n):
     return [(d["prompt"], d["rejected"]) for d in data[:n]]
 
 
-def make_edit(rejected, instruction):
-    return invoke_llm(f"{instruction}\n\n---\nResponse to revise:\n{rejected}",
+def make_edit(rejected, instruction, target_words=None):
+    extra = ""
+    if target_words:
+        lo, hi = int(0.9 * target_words), int(1.1 * target_words)
+        extra = (f"\n\nHARD LENGTH CONSTRAINT: the original is {target_words} words. Your revision "
+                 f"MUST be between {lo} and {hi} words -- if you add detail, cut elsewhere to "
+                 f"compensate. This constraint overrides everything else.")
+    return invoke_llm(f"{instruction}{extra}\n\n---\nResponse to revise:\n{rejected}",
                       max_tokens=1500, temperature=0.3)
 
 
@@ -151,6 +158,8 @@ def main():
     ap.add_argument("--length-matched", action="store_true",
                     help="use length-preserving single-attribute edits (+ a neutral paraphrase "
                          "control) and log the edited/original word-count ratio")
+    ap.add_argument("--sleep", type=float, default=1.0,
+                    help="seconds to pause after each Bedrock call (avoids ThrottlingException)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -189,7 +198,10 @@ def main():
         h0 = embed_one(model, tokenizer, prompt, rejected, device, args.max_length)
         s0 = proj(h0)
         for edit, instr in edits.items():
-            edited = make_edit(rejected, instr)
+            tw = wc(rejected) if args.length_matched else None
+            edited = make_edit(rejected, instr, target_words=tw)
+            if args.sleep:
+                time.sleep(args.sleep)          # throttle-avoidance pause after each Bedrock call
             if not edited:
                 continue
             lr = wc(edited) / max(wc(rejected), 1)
