@@ -195,8 +195,8 @@ with open ("data/prism/conversations.jsonl", 'r') as f:
                 data_dialog.data[d["conversation_id"]].turns[utterance["turn"]].rejected_utterance.append(utterance["content"])
 
 # convert to dict
-data_dialog = data_dialog.dict()["data"]
-data_user = data_user.dict()["data"]
+data_dialog = data_dialog.model_dump()["data"]
+data_user = data_user.model_dump()["data"]
 
 # filter out users with no qualified example
 dialog_ids = list(data_dialog.keys())
@@ -296,6 +296,8 @@ def load_prism_comparisons(
 
     def preprocess_function(is_train):
         data = []
+        skipped_no_chosen = 0
+        skipped_no_rejected = 0
 
         if is_train:
             dialog_ids = split_ids["train_dialog_ids"]
@@ -312,54 +314,67 @@ def load_prism_comparisons(
                     "content": turn["user_utterance"][0]
                 })
 
-                if turn['turn_nb'] < data_dialog[dialog_id]["total_turn_nb"]:   
-                    assert len(turn['chosen_utterance']) > 0
-                    assert len(turn['rejected_utterance']) > 0
+                chosen_utterance = None
+                if turn['turn_nb'] < data_dialog[dialog_id]["total_turn_nb"]:
+                    chosen_utterances = turn['chosen_utterance']
+                    rejected_utterances = turn['rejected_utterance']
 
-                    if len(turn['chosen_utterance']) > 1:
+                    if len(chosen_utterances) > 1:
                         assert all([
-                            x == turn['chosen_utterance'][0]
-                            for x in turn['chosen_utterance']])
+                            x == chosen_utterances[0]
+                            for x in chosen_utterances
+                        ])
 
                     # Emit one dataset row per chosen/rejected response pair.
                     # Both assistant contents must be strings. The old pipeline
                     # stored every rejected response as one list-valued content,
                     # creating a string-vs-list formatting shortcut.
-                    chosen_utterance = turn["chosen_utterance"][0]
-                    assert isinstance(chosen_utterance, str)
-                    for rejected_idx, rejected_utterance in enumerate(
-                        turn["rejected_utterance"]
-                    ):
-                        assert isinstance(rejected_utterance, str)
-                        entry = {
-                            'data_source': 'prism',
-                            'prompt': copy.deepcopy(full_dialog),
-                            'ability': 'alignment',
-                            'reward_model': {
-                                'style': 'model',
-                                'ground_truth': '', # not used
-                            },
-                            'extra_info': {
-                                'split': 'train' if is_train else 'test',
-                                'seen': user_id in split_ids["seen_user_ids"],
-                                'user_id': user_id,
-                                'dialog_id': dialog_id,
-                                'turn_nb': turn['turn_nb'],
-                                'total_turn_nb': data_dialog[dialog_id]["total_turn_nb"],
-                                'rejected_idx': rejected_idx,
-                                'pair_format': PAIR_FORMAT,
-                                'chosen_utterance': chosen_utterance,
-                                'rejected_utterance': rejected_utterance,
+                    if chosen_utterances:
+                        chosen_utterance = chosen_utterances[0]
+                        assert isinstance(chosen_utterance, str)
+                        if not rejected_utterances:
+                            skipped_no_rejected += 1
+                        for rejected_idx, rejected_utterance in enumerate(
+                            rejected_utterances
+                        ):
+                            assert isinstance(rejected_utterance, str)
+                            entry = {
+                                'data_source': 'prism',
+                                'prompt': copy.deepcopy(full_dialog),
+                                'ability': 'alignment',
+                                'reward_model': {
+                                    'style': 'model',
+                                    'ground_truth': '', # not used
+                                },
+                                'extra_info': {
+                                    'split': 'train' if is_train else 'test',
+                                    'seen': user_id in split_ids["seen_user_ids"],
+                                    'user_id': user_id,
+                                    'dialog_id': dialog_id,
+                                    'turn_nb': turn['turn_nb'],
+                                    'total_turn_nb': data_dialog[dialog_id]["total_turn_nb"],
+                                    'rejected_idx': rejected_idx,
+                                    'pair_format': PAIR_FORMAT,
+                                    'chosen_utterance': chosen_utterance,
+                                    'rejected_utterance': rejected_utterance,
+                                }
                             }
-                        }
-                        data.append(entry)
+                            data.append(entry)
+                    else:
+                        skipped_no_chosen += 1
 
-                if turn['turn_nb'] < data_dialog[dialog_id]["total_turn_nb"]:   
+                if chosen_utterance is not None:
                     full_dialog.append({
                         "role": "assistant",
                         "content": chosen_utterance,
                     })
 
+        split_name = "train" if is_train else "test"
+        print(
+            f"{split_name}: emitted {len(data)} preference pairs; "
+            f"skipped {skipped_no_rejected} turns without rejected responses "
+            f"and {skipped_no_chosen} turns without chosen responses"
+        )
         return data
 
     train_dataset = preprocess_function(is_train=True)
