@@ -1,5 +1,6 @@
 # Cached embeddings (large, regenerate via generate-prism-embeddings.py)
 PRISM/data/prism/*.pkl
+PRISM/artifacts/
 
 # Generated reproducibility experiment results (regenerated per run, we might have diffs so don't want unnecessary merge conflicts)
 PRISM/basis_reproducibility_results.csv

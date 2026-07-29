@@ -24,6 +24,8 @@ import os
 import time
 os.makedirs("data/prism", exist_ok=True)
 
+from modeling import PAIR_FORMAT
+
 def is_valid_jsonl(filepath):
     """Check if a file is valid JSONL (not HTML rate limit page)"""
     if not os.path.exists(filepath):
@@ -310,41 +312,47 @@ def load_prism_comparisons(
                     "content": turn["user_utterance"][0]
                 })
 
-                entry = {
-                    'data_source': 'prism',
-                    'prompt': copy.deepcopy(full_dialog),
-                    'ability': 'alignment',
-                    'reward_model': {
-                        'style': 'model',
-                        'ground_truth': '', # not used
-                    },
-                    'extra_info': {
-                        'split': 'train' if is_train else 'test',
-                        'seen': user_id in split_ids["seen_user_ids"],
-                        'user_id': user_id,
-                        'dialog_id': dialog_id,
-                        'turn_nb': turn['turn_nb'],
-                        'total_turn_nb': data_dialog[dialog_id]["total_turn_nb"],
-                    }
-                }
-
                 if turn['turn_nb'] < data_dialog[dialog_id]["total_turn_nb"]:   
                     assert len(turn['chosen_utterance']) > 0
+                    assert len(turn['rejected_utterance']) > 0
 
                     if len(turn['chosen_utterance']) > 1:
                         assert all([
                             x == turn['chosen_utterance'][0]
                             for x in turn['chosen_utterance']])
 
-                    # the single resporse string
+                    # Emit one dataset row per chosen/rejected response pair.
+                    # Both assistant contents must be strings. The old pipeline
+                    # stored every rejected response as one list-valued content,
+                    # creating a string-vs-list formatting shortcut.
                     chosen_utterance = turn["chosen_utterance"][0]
-                    entry['extra_info']['chosen_utterance'] = chosen_utterance
-
-                    # all rejected response strings
-                    rejected_utterance = turn["rejected_utterance"]
-                    entry['extra_info']['rejected_utterance'] = rejected_utterance
-
-                data.append(entry)
+                    assert isinstance(chosen_utterance, str)
+                    for rejected_idx, rejected_utterance in enumerate(
+                        turn["rejected_utterance"]
+                    ):
+                        assert isinstance(rejected_utterance, str)
+                        entry = {
+                            'data_source': 'prism',
+                            'prompt': copy.deepcopy(full_dialog),
+                            'ability': 'alignment',
+                            'reward_model': {
+                                'style': 'model',
+                                'ground_truth': '', # not used
+                            },
+                            'extra_info': {
+                                'split': 'train' if is_train else 'test',
+                                'seen': user_id in split_ids["seen_user_ids"],
+                                'user_id': user_id,
+                                'dialog_id': dialog_id,
+                                'turn_nb': turn['turn_nb'],
+                                'total_turn_nb': data_dialog[dialog_id]["total_turn_nb"],
+                                'rejected_idx': rejected_idx,
+                                'pair_format': PAIR_FORMAT,
+                                'chosen_utterance': chosen_utterance,
+                                'rejected_utterance': rejected_utterance,
+                            }
+                        }
+                        data.append(entry)
 
                 if turn['turn_nb'] < data_dialog[dialog_id]["total_turn_nb"]:   
                     full_dialog.append({

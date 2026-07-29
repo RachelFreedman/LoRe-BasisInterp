@@ -10,8 +10,15 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import random
+import os
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# Override on a shared GPU host with, for example:
+#   LORE_SAVE_DIR=/path/to/experiment python train_basis.py
+# The local default keeps the code runnable outside Meta's internal filesystem.
+SAVE_DIR = os.environ.get("LORE_SAVE_DIR", "artifacts/lore")
+SAVE_TAG = os.environ.get("LORE_SAVE_TAG", "")
 
 
 def set_seed(s):
@@ -597,12 +604,19 @@ def run_regularized(K_list, alpha_list, V_final, train_features, test_features_s
                 W_joint = [torch.tensor([1.0]).to(device) for i in range(N)]
             else: 
                 W_joint, V_joint = solve_regularized_simplex(V_final, alpha, train_features, K, num_iterations= 20000, learning_rate=0.5)
-            
+                os.makedirs(SAVE_DIR, exist_ok=True)
+
                 # Save V_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_V_lore_K_{K}_alpha_{alpha}.pt"
+                filename = os.path.join(
+                    SAVE_DIR,
+                    f"{SAVE_TAG}PRISM_V_lore_K_{K}_alpha_{alpha}.pt",
+                )
                 torch.save(V_joint, filename)
                 # Save W_joint to file
-                filename = f"/checkpoint/ai_society/representative_llms/data/lore/community/PRISM_W_lore_seen_{K}_{alpha}.pt"
+                filename = os.path.join(
+                    SAVE_DIR,
+                    f"{SAVE_TAG}PRISM_W_lore_seen_{K}_{alpha}.pt",
+                )
                 torch.save(W_joint.detach().cpu(), filename)
 
             print("Train Performance")

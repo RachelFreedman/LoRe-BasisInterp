@@ -15,6 +15,7 @@ from tqdm import tqdm
 from collections import defaultdict
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
+from modeling import MODEL_NAME, PAIR_FORMAT
 
 # Named function to replace lambda for pickle compatibility
 def nested_defaultdict():
@@ -44,29 +45,51 @@ def generate_prism_embeddings(
     Later for given user_id (and specifiec chosen/rejected value, seen True or False value) gather all chosen embeddings as a tensor
     """
     embeddings_data = []
+    chosen_embedding_cache = {}
     for entry in tqdm(dataset, desc="Generating embeddings"):
         
         user_id = entry["extra_info"]["user_id"]
         dialog_id = entry["extra_info"]["dialog_id"]
         prompt = entry["prompt"]
+        chosen_text = entry["extra_info"]["chosen_utterance"]
+        rejected_text = entry["extra_info"]["rejected_utterance"]
 
-        chosen = [{"content": entry["extra_info"]["chosen_utterance"], "role": "assistant"}]
-        rejected = [{"content": entry["extra_info"]["rejected_utterance"], "role": "assistant"}]
+        if entry["extra_info"].get("pair_format") != PAIR_FORMAT:
+            raise ValueError(
+                "Dataset does not use the corrected string-vs-string PRISM "
+                "pair format. Rerun PRISM/prepare.py before embedding."
+            )
+        if not isinstance(chosen_text, str) or not isinstance(rejected_text, str):
+            raise TypeError(
+                "PRISM chosen_utterance and rejected_utterance must both be "
+                f"strings; got {type(chosen_text).__name__} and "
+                f"{type(rejected_text).__name__}."
+            )
+
+        chosen = [{"content": chosen_text, "role": "assistant"}]
+        rejected = [{"content": rejected_text, "role": "assistant"}]
         chosen_conv = prompt + chosen
         rejected_conv = prompt + rejected
-        
-        # Tokenize the current dialog state
-        tokenized = tokenizer.apply_chat_template(
-            chosen_conv,
-            tokenize=True,
-            return_tensors="pt"
-        ).to(device)
 
-        with torch.no_grad():
-            output = model(tokenized)
-            embedding = output.last_hidden_state[0, -1].cpu()  # [hidden_dim]
+        # A turn with multiple rejected responses produces multiple rows but
+        # shares one chosen conversation, so only embed that side once.
+        chosen_key = (user_id, dialog_id, entry["extra_info"]["turn_nb"])
+        if chosen_key not in chosen_embedding_cache:
+            tokenized = tokenizer.apply_chat_template(
+                chosen_conv,
+                tokenize=True,
+                return_tensors="pt"
+            ).to(device)
 
-        entry["extra_info"]["chosen_conv_embedding"] = embedding
+            with torch.no_grad():
+                output = model(tokenized)
+                chosen_embedding_cache[chosen_key] = (
+                    output.last_hidden_state[0, -1].cpu()
+                )
+
+        entry["extra_info"]["chosen_conv_embedding"] = (
+            chosen_embedding_cache[chosen_key]
+        )
 
         # Tokenize the current dialog state
         tokenized = tokenizer.apply_chat_template(
@@ -93,7 +116,7 @@ def generate_prism_embeddings(
 if __name__ == "__main__":
     # --- Configuration ---
     device = "cuda:0"
-    model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
+    model_name = MODEL_NAME
 
     # --- Load model and tokenizer ---
     model = AutoModel.from_pretrained(

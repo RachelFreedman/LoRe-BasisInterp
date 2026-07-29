@@ -6,6 +6,7 @@
 
 import torch
 from collections import defaultdict
+from modeling import PAIR_FORMAT, load_reference_direction
 
 device = "cuda:0"
 
@@ -17,6 +18,12 @@ def group_embeddings_by_user(train_embeddings, test_embeddings, device):
             if extra_info.get("seen") == seen_value and extra_info.get("split") == split_name:
                 user_id = extra_info.get("user_id")
                 if user_id:
+                    if extra_info.get("pair_format") != PAIR_FORMAT:
+                        raise ValueError(
+                            "Cached embeddings predate the corrected PRISM "
+                            "string-vs-string format. Rerun prepare.py and "
+                            "generate-prism-embeddings.py."
+                        )
                     shape = torch.tensor(extra_info["chosen_conv_embedding"]).shape
                     chosen = torch.tensor(extra_info["chosen_conv_embedding"], dtype=torch.float32, device=device)
                     rejected = torch.tensor(extra_info["rejected_conv_embedding"], dtype=torch.float32, device=device)
@@ -62,24 +69,7 @@ print(N)
 print(N_unseen)
 
 
-from transformers import AutoModel
-
-model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
-rm = AutoModel.from_pretrained(
-    model_name,
-    torch_dtype=torch.bfloat16,
-    device_map=device,
-    attn_implementation="eager",
-    num_labels=1,
-)
-
-# Initialize a variable to store the last linear layer
-last_linear_layer = None
-# Iterate over the model's modules
-for name, module in rm.named_modules():
-    if isinstance(module, torch.nn.Linear):
-        last_linear_layer = module
-V_final = last_linear_layer.weight[:,0].to(device).to(torch.float32).reshape(-1, 1)
+V_final = load_reference_direction(device)
 
 # filename = f"./PRISM/V_ref.pt"
 # torch.save(V_final, filename)
@@ -109,6 +99,12 @@ plt.legend()
 
 alpha = alpha_list[0]
 # Save the plot
-plt.savefig(f'./generalization_accuracy_vs_rank_lore_alpha_{alpha}.png', dpi=300, bbox_inches='tight')
+os.makedirs(SAVE_DIR, exist_ok=True)
+plot_path = os.path.join(
+    SAVE_DIR,
+    f"{SAVE_TAG}generalization_accuracy_vs_rank_lore_alpha_{alpha}.png",
+)
+plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+print(f"Saved rank-sweep plot to {plot_path}")
 plt.show()
 plt.close()

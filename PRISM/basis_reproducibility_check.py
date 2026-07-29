@@ -102,6 +102,7 @@ import csv
 import argparse
 import numpy as np
 import torch
+import torch.nn.functional as F
 from collections import defaultdict
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -110,6 +111,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils import LoRe_regularized, set_seed  # noqa: E402
+from modeling import PAIR_FORMAT, load_reference_direction  # noqa: E402
 
 
 def group_embeddings_by_user(dataset, seen_value, split_name):
@@ -120,6 +122,12 @@ def group_embeddings_by_user(dataset, seen_value, split_name):
         if info.get("seen") == seen_value and info.get("split") == split_name:
             uid = info.get("user_id")
             if uid:
+                if info.get("pair_format") != PAIR_FORMAT:
+                    raise ValueError(
+                        "Cached embeddings predate the corrected PRISM "
+                        "string-vs-string format. Rerun prepare.py and "
+                        "generate-prism-embeddings.py."
+                    )
                 chosen = torch.tensor(info["chosen_conv_embedding"], dtype=torch.float32, device=device)
                 rejected = torch.tensor(info["rejected_conv_embedding"], dtype=torch.float32, device=device)
                 grouped[uid].append(chosen - rejected)
@@ -127,22 +135,8 @@ def group_embeddings_by_user(dataset, seen_value, split_name):
 
 
 def get_reference_direction():
-    """The single global reward direction = backbone's final linear-layer weight.
-    Used as the regularization anchor (V_sft). Loads the 8B backbone once."""
-    from transformers import AutoModel
-    model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
-    rm = AutoModel.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-        device_map=device,
-        attn_implementation="eager",
-        num_labels=1,
-    )
-    last = None
-    for _, m in rm.named_modules():
-        if isinstance(m, torch.nn.Linear):
-            last = m
-    return last.weight[:, 0].to(device).to(torch.float32).reshape(-1, 1)
+    """Load the backbone's actual scalar reward head as [4096, 1]."""
+    return load_reference_direction(device)
 
 
 def accuracy(W, V, features):
@@ -156,7 +150,37 @@ def accuracy(W, V, features):
     return float(np.mean(accs)), float(np.std(accs))
 
 
-def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
+def basis_collapse_metrics(V):
+    """Return compact diagnostics for whether V's columns share one direction."""
+    singular_values = torch.linalg.svdvals(V.float())
+    if singular_values.numel() > 1 and singular_values[0] > 0:
+        s2_s1 = float((singular_values[1] / singular_values[0]).item())
+    else:
+        s2_s1 = float("nan")
+
+    rank_threshold = singular_values[0] * 1e-3
+    numerical_rank = int((singular_values > rank_threshold).sum().item())
+
+    K = V.shape[1]
+    if K > 1:
+        V_unit = F.normalize(V.float(), dim=0)
+        abs_cos = torch.abs(V_unit.T @ V_unit)
+        diagonal = torch.eye(K, dtype=torch.bool, device=abs_cos.device)
+        off_diagonal = abs_cos[~diagonal]
+        mean_abs_basis_cos = float(off_diagonal.mean().item())
+    else:
+        mean_abs_basis_cos = float("nan")
+
+    return {
+        "numerical_rank": numerical_rank,
+        "s2_s1": s2_s1,
+        "mean_abs_basis_cos": mean_abs_basis_cos,
+    }
+
+
+def run_one(
+    part, label, K, seed, V_final, train_seen, test_seen, base_test_acc, args
+):
     """Train one basis set under a given (K, seed). Returns (row, V_full) where
     V_full is the FULL [4096, K] basis matrix BEFORE pruning -- that full matrix
     is the thing teammates should compare, since pruning can keep a different
@@ -179,12 +203,16 @@ def run_one(part, label, K, seed, V_final, train_seen, test_seen, args):
     # columns add ~nothing, so this matches the repo's reported metric.
     train_acc, _ = accuracy(W_kept, V_kept, train_seen)
     test_acc, test_std = accuracy(W_kept, V_kept, test_seen)
+    collapse = basis_collapse_metrics(V_full)
     row = {
         "part": part, "run": label, "K": K, "seed": seed,
         "alpha": args.alpha, "iters": args.iters, "lr": args.lr,
         "bases_kept": V_kept.shape[1],                        # survived pruning (info)
         "basis_fp": float(torch.linalg.norm(V_full).item()),  # ||V||_F over ALL K cols
         "train_acc": train_acc, "test_acc": test_acc, "test_std": test_std,
+        "base_test_acc": base_test_acc,
+        "delta_vs_base": test_acc - base_test_acc,
+        **collapse,
     }
     return row, V_full.cpu(), W_full.cpu()
 
@@ -193,14 +221,20 @@ def print_table(title, rows):
     print("\n\n" + "#" * 80)
     print(f"# {title}")
     print("#" * 80)
-    header = (f"{'run':>9} | {'K':>3} | {'seed':>4} | {'bases_kept':>10} | "
-              f"{'basis_fp':>10} | {'train_acc':>9} | {'test_acc':>9} | {'test_std':>8}")
+    header = (
+        f"{'run':>9} | {'K':>3} | {'seed':>4} | {'kept':>4} | {'rank':>4} | "
+        f"{'s2/s1':>7} | {'mean|cos|':>9} | {'test_acc':>8} | "
+        f"{'vs_base':>8}"
+    )
     print(header)
     print("-" * len(header))
     for r in rows:
-        print(f"{r['run']:>9} | {r['K']:>3} | {r['seed']:>4} | {r['bases_kept']:>10} | "
-              f"{r['basis_fp']:>10.4f} | {r['train_acc']:>9.4f} | "
-              f"{r['test_acc']:>9.4f} | {r['test_std']:>8.4f}")
+        print(
+            f"{r['run']:>9} | {r['K']:>3} | {r['seed']:>4} | "
+            f"{r['bases_kept']:>4} | {r['numerical_rank']:>4} | "
+            f"{r['s2_s1']:>7.4f} | {r['mean_abs_basis_cos']:>9.4f} | "
+            f"{r['test_acc']:>8.4f} | {r['delta_vs_base']:>+8.4f}"
+        )
 
 
 def print_basis_detail(key, m, vsft):
@@ -302,6 +336,13 @@ def main():
 
     print("Loading backbone once for reference direction (V_sft)...")
     V_final = get_reference_direction()
+    base_W = [torch.ones(1, device=device) for _ in train_seen]
+    base_train_acc, _ = accuracy(base_W, V_final, train_seen)
+    base_test_acc, base_test_std = accuracy(base_W, V_final, test_seen)
+    print(
+        f"Base RM accuracy: train={base_train_acc:.4f}, "
+        f"test={base_test_acc:.4f} ± {base_test_std:.4f}"
+    )
 
     part1, part2 = [], []
     # run-key -> self-contained dict {V[4096,K], W[users,K], **metadata}, so every
@@ -312,7 +353,8 @@ def main():
     # ---- PART 1: rank sweep (vary K, fixed seed) -- bases differ by design ----
     for K in args.rank_values:
         row, V_full, W_full = run_one("PART1-rank", f"K={K}", K, args.rank_seed,
-                                      V_final, train_seen, test_seen, args)
+                                      V_final, train_seen, test_seen,
+                                      base_test_acc, args)
         part1.append(row)
         key = f"PART1_K{K}_seed{args.rank_seed}"
         matrices[key] = {"V": V_full, "W": W_full, **row}
@@ -321,7 +363,8 @@ def main():
     # ---- PART 2: seed variance / team reproducibility (fixed K, vary seed) ----
     for s in args.seed_values:
         row, V_full, W_full = run_one("PART2-seed", f"seed={s}", args.fixed_K, s,
-                                      V_final, train_seen, test_seen, args)
+                                      V_final, train_seen, test_seen,
+                                      base_test_acc, args)
         part2.append(row)
         key = f"PART2_K{args.fixed_K}_seed{s}"
         matrices[key] = {"V": V_full, "W": W_full, **row}
@@ -354,14 +397,21 @@ def main():
           "m['PART2_K10_seed42']['V'] -> [4096, K]")
 
     # ---- write combined CSV (gitignored; copy to your machine to share) ----
-    fields = ["part", "run", "K", "seed", "alpha", "iters", "lr",
-              "bases_kept", "basis_fp", "train_acc", "test_acc", "test_std"]
+    fields = [
+        "part", "run", "K", "seed", "alpha", "iters", "lr",
+        "bases_kept", "basis_fp", "numerical_rank", "s2_s1",
+        "mean_abs_basis_cos", "train_acc", "test_acc", "test_std",
+        "base_test_acc", "delta_vs_base",
+    ]
     with open(args.out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         for r in part1 + part2:
             row = dict(r)
-            for k in ("basis_fp", "train_acc", "test_acc", "test_std"):
+            for k in (
+                "basis_fp", "s2_s1", "mean_abs_basis_cos", "train_acc",
+                "test_acc", "test_std", "base_test_acc", "delta_vs_base",
+            ):
                 row[k] = f"{row[k]:.4f}"
             writer.writerow(row)
     print(f"\nWrote {len(part1) + len(part2)} rows to {args.out}")
