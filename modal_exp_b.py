@@ -34,6 +34,16 @@ image = (
 )
 
 
+@app.function(          # CPU only: one Bedrock call to validate creds/region/model, no GPU
+    image=image,
+    timeout=600,
+    secrets=[modal.Secret.from_name("aws")],
+)
+def dry_run_exp_b():
+    os.chdir("/workspace")
+    subprocess.run(["python", "PRISM/exp_b_causal_edit.py", "--dry-run"], check=True)
+
+
 @app.function(
     image=image,
     volumes={"/vol": prism_volume},
@@ -55,7 +65,11 @@ def run_exp_b(n: int):
 
 
 @app.local_entrypoint()
-def main(n: int = 60):
+def main(n: int = 60, dry_run: bool = False):
+    if dry_run:
+        print("Validating Bedrock creds/region/model on Modal (CPU, one call)...")
+        dry_run_exp_b.remote()
+        return
     print("Submitting Experiment B (causal edit probe) to Modal...")
     csv_bytes = run_exp_b.remote(n)
     os.makedirs("results/causal_edit", exist_ok=True)

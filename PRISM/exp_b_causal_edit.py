@@ -109,13 +109,35 @@ def embed_one(model, tokenizer, prompt, response, device, max_length):
     return hs[0, idx[0]].float().cpu()          # [H]
 
 
+def dry_run():
+    """Validate the Bedrock credential/region/model with ONE edit call, then exit.
+    Skips the Skywork load entirely, so it returns in seconds and costs ~nothing."""
+    print("[dry-run] making one Bedrock edit call to validate creds/region/model...")
+    out = make_edit("The capital of France is Berlin.",
+                    EDITS["+factuality"])
+    if out:
+        print("[dry-run] SUCCESS. Bedrock returned:\n  " + out.strip().replace("\n", "\n  ")[:600])
+        print("\n[dry-run] Credentials/region/model work. Safe to run the full experiment.")
+        return 0
+    print("[dry-run] FAILED: no response from Bedrock. Check that the `aws` secret has "
+          "AWS_BEARER_TOKEN_BEDROCK, AWS_DEFAULT_REGION matches the key's region, and "
+          "BEDROCK_MODEL_ID is an inference profile enabled in that region (us.* vs eu.*).")
+    return 1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=60, help="number of rejected responses to edit")
     ap.add_argument("--max_length", type=int, default=2048)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="make one Bedrock call to validate creds/region/model, then exit "
+                         "(no Skywork load, no GPU work)")
     ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results", "causal_edit",
                                                   "exp_b_causal_edit.csv"))
     args = ap.parse_args()
+
+    if args.dry_run:
+        sys.exit(dry_run())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}. Loading Skywork backbone + directions...")
