@@ -50,7 +50,11 @@ def group(ds, seen, split):
 
 
 def eval_acc(W, V, feats):
-    return float(np.mean([(X @ (V @ W[i]) > 0).float().mean().item() for i, X in enumerate(feats)]))
+    # feats live on CPU; V/W may be on GPU after training -> bring everything to CPU to eval.
+    V = V.detach().cpu()
+    W = W.detach().cpu()
+    return float(np.mean([(X.cpu() @ (V @ W[i]) > 0).float().mean().item()
+                          for i, X in enumerate(feats)]))
 
 
 def collapse_metrics(V_full):

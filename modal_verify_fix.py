@@ -47,7 +47,7 @@ image = (
     volumes={"/vol": volume},
     secrets=[modal.Secret.from_name("huggingface")],
 )
-def verify():
+def verify(regen: bool = True):
     os.chdir("/workspace")
     # Persist data on the volume so the regenerated embeddings survive and can be pulled later.
     os.makedirs("/vol/data", exist_ok=True)
@@ -57,12 +57,16 @@ def verify():
     if not os.path.exists("/root/.cache/huggingface"):
         os.symlink("/vol/huggingface_cache", "/root/.cache/huggingface")
 
-    print("\n[1/4] prepare.py  (regenerate FIXED parquet: rejected as a single string)", flush=True)
-    subprocess.run(["python", "PRISM/prepare.py"], check=True)
+    if regen:
+        print("\n[1/4] prepare.py  (regenerate FIXED parquet: rejected as a single string)", flush=True)
+        subprocess.run(["python", "PRISM/prepare.py"], check=True)
 
-    print("\n[2/4] generate-prism-embeddings.py  (regenerate FIXED embeddings)", flush=True)
-    subprocess.run(["python", "PRISM/generate-prism-embeddings.py"], check=True)
-    volume.commit()  # persist the fixed .pkl before the (CPU) analysis steps
+        print("\n[2/4] generate-prism-embeddings.py  (regenerate FIXED embeddings)", flush=True)
+        subprocess.run(["python", "PRISM/generate-prism-embeddings.py"], check=True)
+        volume.commit()  # persist the fixed .pkl before the (CPU) analysis steps
+    else:
+        print("\n[skip 1-2] reusing the FIXED embeddings already on the volume", flush=True)
+        volume.reload()  # pick up the committed fixed .pkl from a previous run
 
     print("\n[3/4] multiseed_collapse.py  (collapse metrics + test acc, several seeds)", flush=True)
     subprocess.run(["python", "PRISM/multiseed_collapse.py"], check=True)
@@ -77,9 +81,14 @@ def verify():
 
 
 @app.local_entrypoint()
-def main():
-    print("Regenerating FIXED PRISM embeddings on Modal and re-checking basis collapse...")
-    csv_bytes = verify.remote()
+def main(regen: bool = True):
+    # --regen / --no-regen : with --no-regen, reuse the fixed embeddings already committed to the
+    # volume and only re-run the (fast, CPU) collapse + base-RM analysis.
+    if regen:
+        print("Regenerating FIXED PRISM embeddings on Modal and re-checking basis collapse...")
+    else:
+        print("Reusing committed FIXED embeddings; re-running collapse + base-RM analysis only...")
+    csv_bytes = verify.remote(regen)
     os.makedirs("results/correct_anchor", exist_ok=True)
     with open("results/correct_anchor/multiseed_collapse_fixed.csv", "wb") as fh:
         fh.write(csv_bytes)
