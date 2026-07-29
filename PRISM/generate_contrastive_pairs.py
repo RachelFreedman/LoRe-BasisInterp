@@ -4,15 +4,24 @@ import boto3
 from tqdm import tqdm
 from concept_library import CONCEPT_LIBRARY
 
-# Boto3 client for Bedrock Runtime
-# Note: Ensure you have AWS credentials configured or the AWS_BEARER_TOKEN_BEDROCK set if using a custom auth setup
+# Boto3 client for Bedrock Runtime.
+# Auth: standard AWS creds OR a Bedrock API key in AWS_BEARER_TOKEN_BEDROCK (botocore reads it
+#       automatically for bedrock-runtime; keep boto3 recent enough to support it).
+# Region: AWS_DEFAULT_REGION / AWS_REGION (Bedrock API keys are region-scoped -- must match the key).
+# Model:  BEDROCK_MODEL_ID -- IMPORTANT: the inference-profile prefix must match the region
+#         (e.g. us.anthropic.* for a us-* key, eu.anthropic.* for an eu-* key), and the model must
+#         be enabled in that region.
+_REGION = os.environ.get("AWS_DEFAULT_REGION") or os.environ.get("AWS_REGION") or "us-east-1"
+DEFAULT_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 try:
-    bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
+    bedrock_client = boto3.client('bedrock-runtime', region_name=_REGION)
+    print(f"[bedrock] region={_REGION} model={DEFAULT_MODEL_ID}")
 except Exception as e:
     print(f"Failed to initialize boto3 client. Make sure AWS credentials are set: {e}")
     bedrock_client = None
 
-def invoke_llm(prompt, model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0", max_tokens=4000, temperature=0.7):
+def invoke_llm(prompt, model_id=None, max_tokens=4000, temperature=0.7):
+    model_id = model_id or DEFAULT_MODEL_ID
     """
     Invokes Amazon Bedrock Converse API.
     By default uses Claude 3.5 Sonnet for high quality generation.
@@ -96,8 +105,8 @@ Consider the definitions:
 
 Answer only with a single word: YES or NO.
 """
-    # Upgraded judge to Claude Sonnet 4.5 for maximum evaluation quality
-    response = invoke_llm(prompt, model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0", max_tokens=10, temperature=0.0)
+    # Judge with the same (env-configurable) model as generation.
+    response = invoke_llm(prompt, max_tokens=10, temperature=0.0)
     if not response:
         return False
         
