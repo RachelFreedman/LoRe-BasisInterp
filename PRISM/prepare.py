@@ -336,12 +336,20 @@ def load_prism_comparisons(
                             x == turn['chosen_utterance'][0]
                             for x in turn['chosen_utterance']])
 
-                    # the single resporse string
+                    # the single chosen response string
                     chosen_utterance = turn["chosen_utterance"][0]
                     entry['extra_info']['chosen_utterance'] = chosen_utterance
 
-                    # all rejected response strings
-                    rejected_utterance = turn["rejected_utterance"]
+                    # BUGFIX (string-vs-list formatting artifact): the original code stored the
+                    # rejected side as the *list* turn["rejected_utterance"], while chosen was a
+                    # string. Downstream (generate-prism-embeddings.py) drops content straight into
+                    # the chat template, so a list renders as its Python repr -- e.g.
+                    #   ['answer one', 'answer two']<|eot_id|>
+                    # (brackets/quotes/commas) -- whereas chosen renders as clean prose. The reward
+                    # model then separates chosen/rejected on that trivial formatting fingerprint,
+                    # which is what makes every learned LoRe basis collapse to one direction. Store a
+                    # single rejected string, matching chosen, so both sides are formatted identically.
+                    rejected_utterance = turn["rejected_utterance"][0]
                     entry['extra_info']['rejected_utterance'] = rejected_utterance
 
                 data.append(entry)
