@@ -124,6 +124,15 @@ if __name__ == "__main__":
     train_dataset = load_dataset("parquet", data_files="data/prism/train.parquet")["train"]
     test_dataset = load_dataset("parquet", data_files="data/prism/test.parquet")["train"]
 
+    # Optional smoke-test limit: EMBED_LIMIT=8 embeds only the first 8 of each split so the
+    # full pipeline (prepare -> embed -> save) can be validated in ~seconds instead of ~2 hours.
+    embed_limit = os.environ.get("EMBED_LIMIT")
+    if embed_limit:
+        n = int(embed_limit)
+        print(f"[EMBED_LIMIT] embedding only the first {n} examples of each split (smoke test)")
+        train_dataset = train_dataset.select(range(min(n, len(train_dataset))))
+        test_dataset = test_dataset.select(range(min(n, len(test_dataset))))
+
     # # --- Generate embeddings ---
     train_embeddings = generate_prism_embeddings(train_dataset, model, tokenizer, device, "data/prism/train_embeddings.pkl")
     test_embeddings = generate_prism_embeddings(test_dataset, model, tokenizer, device, "data/prism/test_embeddings.pkl")
