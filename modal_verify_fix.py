@@ -82,16 +82,28 @@ def verify(regen: bool = True):
                     f"{VOL_PKL}/{p} not on the volume -- run once WITHOUT --no-regen first.")
             shutil.copy(f"{VOL_PKL}/{p}", f"data/prism/{p}")
 
-    print("\n[3/4] multiseed_collapse.py  (collapse metrics + test acc, several seeds)", flush=True)
+    print("\n[3/5] multiseed_collapse.py  (collapse metrics + test acc, several seeds)", flush=True)
     subprocess.run(["python", "PRISM/multiseed_collapse.py"], check=True)
 
-    print("\n[4/4] test_base_rm_accuracy.py  (base-RM accuracy on the FIXED embeddings)", flush=True)
+    print("\n[4/5] test_base_rm_accuracy.py  (base-RM accuracy on the FIXED embeddings)", flush=True)
     subprocess.run(["python", "PRISM/test_base_rm_accuracy.py"], check=True)
 
-    # Return the small result CSV so it syncs straight back to the caller.
-    csv_path = "results/correct_anchor/multiseed_collapse.csv"
-    with open(csv_path, "rb") as fh:
-        return fh.read()
+    print("\n[5/5] per_user_signal.py  (is personalization learnable above the global axis?)", flush=True)
+    pu = subprocess.run(["python", "PRISM/per_user_signal.py"], capture_output=True, text=True)
+    print(pu.stdout, flush=True)
+    if pu.returncode != 0:
+        print("per_user_signal stderr:\n" + pu.stderr, flush=True)
+
+    # Persist all results on the volume so they survive a detached run / disconnected client.
+    os.makedirs(f"{VOL_PKL}/results", exist_ok=True)
+    with open(f"{VOL_PKL}/results/per_user_signal.txt", "w") as fh:
+        fh.write(pu.stdout + "\n" + (pu.stderr or ""))
+    shutil.copy("results/correct_anchor/multiseed_collapse.csv",
+                f"{VOL_PKL}/results/multiseed_collapse.csv")
+    volume.commit()
+
+    with open("results/correct_anchor/multiseed_collapse.csv", "rb") as fh:
+        return fh.read(), pu.stdout
 
 
 @app.local_entrypoint()
@@ -102,12 +114,16 @@ def main(regen: bool = True):
         print("Regenerating FIXED PRISM embeddings on Modal and re-checking basis collapse...")
     else:
         print("Reusing committed FIXED embeddings; re-running collapse + base-RM analysis only...")
-    csv_bytes = verify.remote(regen)
+    csv_bytes, per_user_txt = verify.remote(regen)
     os.makedirs("results/correct_anchor", exist_ok=True)
     with open("results/correct_anchor/multiseed_collapse_fixed.csv", "wb") as fh:
         fh.write(csv_bytes)
     print("\nSynced results/correct_anchor/multiseed_collapse_fixed.csv")
     print(csv_bytes.decode(errors="replace"))
-    print("\nFixed embeddings are on the volume; pull with:")
-    print("  modal volume get lore-prism-data data/prism/train_embeddings.pkl")
-    print("  modal volume get lore-prism-data data/prism/test_embeddings.pkl")
+    print("\n=== per-user signal (corrected embeddings) ===")
+    print(per_user_txt)
+    print("\nFixed embeddings + results are on the volume. If the client disconnected (detached run),")
+    print("pull them once the run finishes with:")
+    print("  modal volume get lore-prism-data prism_embeddings/train_embeddings.pkl")
+    print("  modal volume get lore-prism-data prism_embeddings/test_embeddings.pkl")
+    print("  modal volume get lore-prism-data prism_embeddings/results/per_user_signal.txt")
