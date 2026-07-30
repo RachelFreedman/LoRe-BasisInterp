@@ -62,12 +62,19 @@ def acc(D, direction):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    default_dir = os.path.join(SCRIPT_DIR, "..", "data", "prism")
+    ap.add_argument("--train", default=os.path.join(default_dir, "train_embeddings.pkl"),
+                    help="path to (corrected) train_embeddings.pkl")
+    ap.add_argument("--test", default=os.path.join(default_dir, "test_embeddings.pkl"),
+                    help="path to (corrected) test_embeddings.pkl")
+    args = ap.parse_args()
+
     random.seed(SEED); np.random.seed(SEED); torch.manual_seed(SEED)
-    print("Loading cached PRISM embeddings...")
-    tr = torch.load(os.path.join(SCRIPT_DIR, "..", "data", "prism", "train_embeddings.pkl"),
-                    weights_only=False)
-    te = torch.load(os.path.join(SCRIPT_DIR, "..", "data", "prism", "test_embeddings.pkl"),
-                    weights_only=False)
+    print(f"Loading embeddings:\n  train: {args.train}\n  test:  {args.test}")
+    tr = torch.load(args.train, weights_only=False)
+    te = torch.load(args.test, weights_only=False)
 
     train_u = diffs_by_user(tr, True, "train")   # seen users, train prompts
     test_u = diffs_by_user(te, True, "test")     # seen users, test prompts (unseen prompts)
