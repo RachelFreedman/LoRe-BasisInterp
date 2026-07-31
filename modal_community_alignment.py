@@ -58,9 +58,16 @@ def run_ca(max_users: int, max_pairs_per_user: int, min_pairs: int, smoke: bool)
                     "--out", pairs_path], check=True)
 
     print("\n[2/3] embedding (batched, de-duplicated)...", flush=True)
-    subprocess.run(["python", "PRISM/embed_community_alignment.py",
-                    "--pairs", pairs_path, "--out", emb_path,
-                    "--batch_size", "8" if smoke else "16"], check=True)
+    embed_cmd = ["python", "PRISM/embed_community_alignment.py",
+                 "--pairs", pairs_path, "--out", emb_path,
+                 "--batch_size", "8" if smoke else "16"]
+    # Reuse the previous (smaller-cap) run's embeddings: keys are content hashes, so only the
+    # newly-included texts hit the GPU.
+    prev = f"{VOL_DIR}/embeddings.pt"
+    if os.path.exists(prev):
+        volume.reload()
+        embed_cmd += ["--resume", prev]
+    subprocess.run(embed_cmd, check=True)
     # Persist BEFORE analysis so a later failure never discards the GPU work.
     shutil.copy(pairs_path, f"{VOL_DIR}/pairs.json")
     shutil.copy(emb_path, f"{VOL_DIR}/embeddings.pt")
@@ -91,7 +98,7 @@ def run_ca(max_users: int, max_pairs_per_user: int, min_pairs: int, smoke: bool)
 
 
 @app.local_entrypoint()
-def main(max_users: int = 200, max_pairs_per_user: int = 120,
+def main(max_users: int = 200, max_pairs_per_user: int = 400,
          min_pairs: int = 100, smoke: bool = False):
     if smoke:
         max_users, max_pairs_per_user, min_pairs = 6, 12, 12
