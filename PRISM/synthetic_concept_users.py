@@ -73,7 +73,8 @@ def unit(v):
     return v / (v.norm() + 1e-8)
 
 
-def build_users(emb, concepts, users_per_group, test_frac, gen, high_frac=0.5):
+def build_users(emb, concepts, users_per_group, test_frac, gen, high_frac=0.5,
+                subset_frac=0.7):
     """Create disagreeing users over the concept axes.
 
     high_frac controls how many of each concept's users prefer HIGH-C (the rest prefer LOW-C).
@@ -81,6 +82,12 @@ def build_users(emb, concepts, users_per_group, test_frac, gen, high_frac=0.5):
         exactly zero, so 'global' is degenerate and beating it is nearly trivial.
       * e.g. 0.75: a genuine majority exists, so a NON-degenerate global direction is available.
         Personal beating global in that setting is a much stronger claim.
+
+    subset_frac gives every user an INDEPENDENT random subset of their concept's train pairs.
+    Without it, all users in a group share byte-identical features, so N users are really one user
+    replicated N times -- which inflates how easy the problem looks and makes per-user metrics
+    (w_recovery, personal-vs-other) far too flattering. With it, users overlap but differ, which is
+    how real annotators behave. subset_frac=1.0 restores the old degenerate behaviour.
 
     Returns (train_feats, test_feats, group_id) where group_id[i] identifies the (concept, sign)
     group of user i -- the ground-truth 'axis' that user cares about.
@@ -97,10 +104,13 @@ def build_users(emb, concepts, users_per_group, test_frac, gen, high_frac=0.5):
         # diff as (chosen - rejected): +1 group prefers high, -1 group prefers low
         d_tr = high[tr_idx] - low[tr_idx]
         d_te = high[te_idx] - low[te_idx]
+        n_sub = max(2, int(round(subset_frac * d_tr.shape[0])))
         for sign_i, (sign, count) in enumerate(((+1.0, n_high),
                                                 (-1.0, total_per_concept - n_high))):
             for _ in range(count):
-                train_feats.append(sign * d_tr)
+                # each user sees their own random subset of the concept's train pairs
+                sub = torch.randperm(d_tr.shape[0], generator=gen)[:n_sub]
+                train_feats.append(sign * d_tr[sub])
                 test_feats.append(sign * d_te)
                 group_id.append(ci * 2 + sign_i)
     return train_feats, test_feats, torch.tensor(group_id)
@@ -170,6 +180,9 @@ def main():
     ap.add_argument("--users_per_group", type=int, default=20,
                     help="users preferring high-C, and the same number preferring low-C, per concept")
     ap.add_argument("--test_frac", type=float, default=0.3)
+    ap.add_argument("--subset_frac", type=float, default=0.7,
+                    help="fraction of a concept's train pairs each user sees (own random subset). "
+                         "1.0 makes all users in a group identical -- the degenerate case")
     ap.add_argument("--high_frac", type=float, default=0.5,
                     help="fraction of each concept's users preferring HIGH-C. 0.5 = balanced "
                          "(global direction degenerate); >0.5 gives a real global to beat")
@@ -198,7 +211,7 @@ def main():
     print(f"{n_pairs} pairs/concept -> ~{int(n_pairs*(1-args.test_frac))} train pairs per user; "
           f"{args.users_per_group} users per (concept, sign) group; "
           f"{n_groups*args.users_per_group} users; k_fit={k_fit}, alpha={args.alpha}; "
-          f"high_frac={args.high_frac}")
+          f"high_frac={args.high_frac}, subset_frac={args.subset_frac}")
     print(f"w_recovery chance = 1/{n_groups} = {1/n_groups:.3f}\n")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -217,7 +230,8 @@ def main():
         set_seed(seed)
         gen = torch.Generator().manual_seed(seed)
         train_feats, test_feats, group_id = build_users(
-            emb, concepts, args.users_per_group, args.test_frac, gen, args.high_frac)
+            emb, concepts, args.users_per_group, args.test_frac, gen, args.high_frac,
+            args.subset_frac)
 
         anchor = torch.cat(train_feats, 0).mean(0).reshape(-1, 1)
         model = LoRe_regularized(anchor, args.alpha, len(train_feats), V_true.shape[0],
