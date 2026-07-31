@@ -54,27 +54,43 @@ def acc(D, direction):
     return (D @ direction > 0).float().mean().item()
 
 
-def build_user_diffs(pairs, emb_lookup, min_pairs, test_frac, gen):
-    """{user: (train_diffs [n,4096], test_diffs [m,4096])}, split per user so test prompts are unseen."""
-    by_user = defaultdict(list)
+def build_user_diffs(pairs, emb_lookup, min_pairs, test_frac, gen, split_by_turn=True):
+    """{user: (train_diffs [n,4096], test_diffs [m,4096])}, split per user.
+
+    split_by_turn is essential for a valid held-out set. Each turn yields 3 pairs (the preferred
+    response vs each of the other 3), so those pairs share the SAME prompt and the SAME chosen
+    response. Splitting by pair would put siblings on both sides, letting a trained model memorise
+    "for this prompt, response_d wins" and score the test sibling for free -- inflating LoRe (which
+    trains) while leaving base_rm (which does not) untouched, i.e. an unfair comparison. Grouping by
+    (conversation, turn) keeps all siblings on one side, so test prompts are genuinely unseen.
+    """
+    by_user = defaultdict(lambda: defaultdict(list))   # user -> turn key -> [diffs]
     missing = 0
     for p in pairs:
         kc, kr = text_key(p["prompt"], p["chosen"]), text_key(p["prompt"], p["rejected"])
         if kc not in emb_lookup or kr not in emb_lookup:
             missing += 1
             continue
-        by_user[p["user_id"]].append(emb_lookup[kc] - emb_lookup[kr])
+        turn_key = (p.get("conversation_id"), p.get("turn")) if split_by_turn else len(
+            by_user[p["user_id"]])
+        by_user[p["user_id"]][turn_key].append(emb_lookup[kc] - emb_lookup[kr])
     if missing:
         print(f"[warn] {missing} pairs skipped (embedding not found -- partial embed run?)")
 
     out = {}
-    for u, diffs in by_user.items():
-        if len(diffs) < min_pairs:
+    for u, groups in by_user.items():
+        keys = list(groups)
+        total = sum(len(groups[k]) for k in keys)
+        if total < min_pairs:
             continue
-        D = torch.stack(diffs)
-        n_test = max(1, int(round(test_frac * D.shape[0])))
-        perm = torch.randperm(D.shape[0], generator=gen)
-        out[u] = (D[perm[n_test:]], D[perm[:n_test]])
+        perm = torch.randperm(len(keys), generator=gen).tolist()
+        n_test_groups = max(1, int(round(test_frac * len(keys))))
+        te_keys = {keys[i] for i in perm[:n_test_groups]}
+        tr = [d for k in keys if k not in te_keys for d in groups[k]]
+        te = [d for k in keys if k in te_keys for d in groups[k]]
+        if not tr or not te:
+            continue
+        out[u] = (torch.stack(tr), torch.stack(te))
     return out
 
 
@@ -85,6 +101,10 @@ def main():
     ap.add_argument("--min_pairs", type=int, default=50,
                     help="drop users below this many usable pairs (phase transition is ~50)")
     ap.add_argument("--test_frac", type=float, default=0.3)
+    ap.add_argument("--split_by_pair", action="store_true",
+                    help="LEAKY: split train/test by pair, so sibling pairs from the same turn "
+                         "(same prompt, same chosen) land on both sides. Only for measuring how "
+                         "much that leakage inflates results")
     ap.add_argument("--ranks", type=int, nargs="+", default=[1, 5, 10, 20])
     ap.add_argument("--alpha", type=float, default=0.0)
     ap.add_argument("--iters", type=int, default=1500)
@@ -103,7 +123,8 @@ def main():
     emb_lookup = {k: blob["emb"][i] for i, k in enumerate(blob["keys"])}
     print(f"{len(pairs)} pairs, {len(emb_lookup)} embeddings")
 
-    users = build_user_diffs(pairs, emb_lookup, args.min_pairs, args.test_frac, gen)
+    users = build_user_diffs(pairs, emb_lookup, args.min_pairs, args.test_frac, gen,
+                             split_by_turn=not args.split_by_pair)
     uids = sorted(users)
     if not uids:
         print("No users met the threshold; nothing to run."); return
