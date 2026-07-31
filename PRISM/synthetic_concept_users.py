@@ -73,13 +73,21 @@ def unit(v):
     return v / (v.norm() + 1e-8)
 
 
-def build_users(emb, concepts, users_per_group, test_frac, gen):
+def build_users(emb, concepts, users_per_group, test_frac, gen, high_frac=0.5):
     """Create disagreeing users over the concept axes.
+
+    high_frac controls how many of each concept's users prefer HIGH-C (the rest prefer LOW-C).
+      * 0.5 (default): perfectly balanced. Cleanest recovery test, but the pooled mean diff is then
+        exactly zero, so 'global' is degenerate and beating it is nearly trivial.
+      * e.g. 0.75: a genuine majority exists, so a NON-degenerate global direction is available.
+        Personal beating global in that setting is a much stronger claim.
 
     Returns (train_feats, test_feats, group_id) where group_id[i] identifies the (concept, sign)
     group of user i -- the ground-truth 'axis' that user cares about.
     """
     train_feats, test_feats, group_id = [], [], []
+    total_per_concept = 2 * users_per_group
+    n_high = int(round(high_frac * total_per_concept))
     for ci, c in enumerate(concepts):
         high, low = emb[c]["high"], emb[c]["low"]
         n = high.shape[0]
@@ -89,12 +97,25 @@ def build_users(emb, concepts, users_per_group, test_frac, gen):
         # diff as (chosen - rejected): +1 group prefers high, -1 group prefers low
         d_tr = high[tr_idx] - low[tr_idx]
         d_te = high[te_idx] - low[te_idx]
-        for sign_i, sign in enumerate((+1.0, -1.0)):
-            for _ in range(users_per_group):
+        for sign_i, (sign, count) in enumerate(((+1.0, n_high),
+                                                (-1.0, total_per_concept - n_high))):
+            for _ in range(count):
                 train_feats.append(sign * d_tr)
                 test_feats.append(sign * d_te)
                 group_id.append(ci * 2 + sign_i)
     return train_feats, test_feats, torch.tensor(group_id)
+
+
+def _acc(scores):
+    """Fraction scored positive, counting exact ties as chance.
+
+    Ties matter here: with perfectly balanced +/- user groups the pooled mean diff is EXACTLY zero,
+    so the 'global direction' is the zero vector and every score is 0. Treating those as wrong would
+    report global=0.0, which reads like a catastrophic failure when the truth is 'no global direction
+    exists' -- i.e. chance. Counting ties as 0.5 reports that honestly.
+    """
+    s = scores.flatten()
+    return ((s > 0).float().sum() + 0.5 * (s == 0).float().sum()).item() / max(s.numel(), 1)
 
 
 def personal_vs_global(train_feats, test_feats, group_id):
@@ -103,18 +124,20 @@ def personal_vs_global(train_feats, test_feats, group_id):
     On this dataset personal MUST win (users disagree by construction). Mirrors per_user_signal.py
     so the two are directly comparable to the PRISM numbers.
     """
-    global_dir = unit(torch.cat(train_feats, 0).mean(0))
+    pooled_mean = torch.cat(train_feats, 0).mean(0)
+    global_dir = unit(pooled_mean)
     personal, glob, other = [], [], []
     n = len(train_feats)
     for i in range(n):
         p = unit(train_feats[i].mean(0))
-        personal.append((test_feats[i] @ p > 0).float().mean().item())
-        glob.append((test_feats[i] @ global_dir > 0).float().mean().item())
+        personal.append(_acc(test_feats[i] @ p))
+        glob.append(_acc(test_feats[i] @ global_dir))
         # control: a random user from a DIFFERENT group
         others = [j for j in range(n) if group_id[j] != group_id[i]]
         j = random.choice(others) if others else i
-        other.append((test_feats[i] @ unit(train_feats[j].mean(0)) > 0).float().mean().item())
-    return float(np.mean(personal)), float(np.mean(glob)), float(np.mean(other))
+        other.append(_acc(test_feats[i] @ unit(train_feats[j].mean(0))))
+    return (float(np.mean(personal)), float(np.mean(glob)), float(np.mean(other)),
+            pooled_mean.norm().item())
 
 
 def ground_truth_matrix(concept_vectors, concepts):
@@ -147,6 +170,9 @@ def main():
     ap.add_argument("--users_per_group", type=int, default=20,
                     help="users preferring high-C, and the same number preferring low-C, per concept")
     ap.add_argument("--test_frac", type=float, default=0.3)
+    ap.add_argument("--high_frac", type=float, default=0.5,
+                    help="fraction of each concept's users preferring HIGH-C. 0.5 = balanced "
+                         "(global direction degenerate); >0.5 gives a real global to beat")
     ap.add_argument("--k_fit", type=int, default=None,
                     help="rank given to LoRe (default: 2 x #concepts, to allow +/- directions)")
     ap.add_argument("--alpha", type=float, default=0.0)
@@ -171,14 +197,16 @@ def main():
     print(f"Concepts ({len(concepts)}): {concepts}")
     print(f"{n_pairs} pairs/concept -> ~{int(n_pairs*(1-args.test_frac))} train pairs per user; "
           f"{args.users_per_group} users per (concept, sign) group; "
-          f"{n_groups*args.users_per_group} users; k_fit={k_fit}, alpha={args.alpha}")
+          f"{n_groups*args.users_per_group} users; k_fit={k_fit}, alpha={args.alpha}; "
+          f"high_frac={args.high_frac}")
     print(f"w_recovery chance = 1/{n_groups} = {1/n_groups:.3f}\n")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     f = open(args.out, "w", newline="")
     w = csv.DictWriter(f, fieldnames=["seed", "train_acc", "test_acc", "subspace_align",
                                       "best_axis_match", "min_abs_basis_cos", "w_recovery",
-                                      "personal", "global", "other_group"])
+                                      "personal", "global", "other_group",
+                                      "global_dir_norm"])
     w.writeheader()
 
     print(f"{'seed':>4} | {'test_acc':>8} | {'subspace':>8} | {'axis':>6} | {'min|cos|':>8} | "
@@ -189,7 +217,7 @@ def main():
         set_seed(seed)
         gen = torch.Generator().manual_seed(seed)
         train_feats, test_feats, group_id = build_users(
-            emb, concepts, args.users_per_group, args.test_frac, gen)
+            emb, concepts, args.users_per_group, args.test_frac, gen, args.high_frac)
 
         anchor = torch.cat(train_feats, 0).mean(0).reshape(-1, 1)
         model = LoRe_regularized(anchor, args.alpha, len(train_feats), V_true.shape[0],
@@ -197,7 +225,7 @@ def main():
         Wk, Vk = model.train(train_feats)
         V_full = model.V.detach().cpu()
 
-        pers, glob, oth = personal_vs_global(train_feats, test_feats, group_id)
+        pers, glob, oth, gnorm = personal_vs_global(train_feats, test_feats, group_id)
         row = {
             "seed": seed,
             "train_acc": eval_acc(Wk, Vk, train_feats),
@@ -207,6 +235,7 @@ def main():
             "min_abs_basis_cos": collapse_metrics(V_full),
             "w_recovery": w_recovery(model.W, group_id, n_groups),
             "personal": pers, "global": glob, "other_group": oth,
+            "global_dir_norm": gnorm,
         }
         rows.append(row); w.writerow(row); f.flush()
         print(f"{seed:>4} | {row['test_acc']:>8.4f} | {row['subspace_align']:>8.4f} | "
@@ -225,7 +254,8 @@ def main():
     print("\n=== control: personal vs global (cf. PRISM: personal 0.566 < global 0.591) ===")
     print(f"  personal   {m('personal'):.4f}")
     print(f"  global     {m('global'):.4f}")
-    print(f"  other group{m('other_group'):.4f}")
+    print(f"  other group {m('other_group'):.4f}")
+    print(f"  (pooled mean-diff norm {m('global_dir_norm'):.3g}: ~0 means the +/- groups cancel\n   exactly, i.e. NO global direction exists -- global is at chance by construction)")
     if m("personal") <= m("global"):
         print("\n  [!] personal did NOT beat global. Users are supposed to disagree by construction, "
               "so this means the construction (or the embedding space) failed -- treat the recovery "
