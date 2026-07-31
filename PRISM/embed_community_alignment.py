@@ -68,6 +68,8 @@ def main():
                                                   "embeddings.pt"))
     ap.add_argument("--batch_size", type=int, default=16)
     ap.add_argument("--max_length", type=int, default=1024)
+    ap.add_argument("--resume", default=None,
+                    help="existing embeddings .pt to reuse; only new texts are embedded")
     ap.add_argument("--limit", type=int, default=None,
                     help="embed only the first N unique texts (smoke test)")
     args = ap.parse_args()
@@ -86,8 +88,22 @@ def main():
     keys = list(uniq.keys())
     if args.limit:
         keys = keys[:args.limit]
-    print(f"{len(keys)} unique (prompt, response) texts to embed "
+    print(f"{len(keys)} unique (prompt, response) texts "
           f"({2*len(pairs)/max(len(keys),1):.2f}x saved by de-duplication)")
+
+    # Resume: reuse embeddings already computed for the same texts. Keys are content hashes, so a
+    # previous smaller run (e.g. a lower --max_pairs_per_user) covers a subset of this one and only
+    # the new texts need the GPU.
+    have_keys, have_emb = [], None
+    if args.resume and os.path.exists(args.resume):
+        prev = torch.load(args.resume, weights_only=False)
+        prev_idx = {k: i for i, k in enumerate(prev["keys"])}
+        reuse = [k for k in keys if k in prev_idx]
+        if reuse:
+            have_keys = reuse
+            have_emb = prev["emb"][torch.tensor([prev_idx[k] for k in reuse])]
+        keys = [k for k in keys if k not in prev_idx]
+        print(f"  resuming from {args.resume}: reusing {len(have_keys)}, embedding {len(keys)} new")
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}. Loading {MODEL}...", flush=True)
@@ -102,8 +118,14 @@ def main():
     if not torch.cuda.is_available():
         model = model.to(device)
 
-    texts = [render(tokenizer, *uniq[k]) for k in keys]
-    emb = embed_texts(model, tokenizer, texts, device, args.batch_size, args.max_length)
+    if keys:
+        texts = [render(tokenizer, *uniq[k]) for k in keys]
+        emb = embed_texts(model, tokenizer, texts, device, args.batch_size, args.max_length)
+    else:
+        emb = torch.empty(0, 4096)
+    if have_emb is not None:                      # merge reused + newly embedded
+        keys = have_keys + keys
+        emb = torch.cat([have_emb, emb], 0)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     torch.save({"keys": keys, "emb": emb}, args.out)

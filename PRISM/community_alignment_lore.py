@@ -54,7 +54,8 @@ def acc(D, direction):
     return (D @ direction > 0).float().mean().item()
 
 
-def build_user_diffs(pairs, emb_lookup, min_pairs, test_frac, gen, split_by_turn=True):
+def build_user_diffs(pairs, emb_lookup, min_pairs, test_frac, gen, split_by_turn=True,
+                     max_pairs=None):
     """{user: (train_diffs [n,4096], test_diffs [m,4096])}, split per user.
 
     split_by_turn is essential for a valid held-out set. Each turn yields 3 pairs (the preferred
@@ -80,6 +81,15 @@ def build_user_diffs(pairs, emb_lookup, min_pairs, test_frac, gen, split_by_turn
     out = {}
     for u, groups in by_user.items():
         keys = list(groups)
+        if max_pairs:
+            # trim whole TURNS (never split a turn) until under the budget, so the leak-free
+            # property is preserved while sweeping how much data each user gets
+            kept, total_kept = [], 0
+            for k in keys:
+                if total_kept >= max_pairs:
+                    break
+                kept.append(k); total_kept += len(groups[k])
+            keys = kept
         total = sum(len(groups[k]) for k in keys)
         if total < min_pairs:
             continue
@@ -101,6 +111,9 @@ def main():
     ap.add_argument("--min_pairs", type=int, default=50,
                     help="drop users below this many usable pairs (phase transition is ~50)")
     ap.add_argument("--test_frac", type=float, default=0.3)
+    ap.add_argument("--max_pairs", type=int, default=None,
+                    help="cap pairs per user (trims whole turns). Sweep this to test whether more "
+                         "data per user helps -- the real-data analogue of synthetic_recovery.py")
     ap.add_argument("--split_by_pair", action="store_true",
                     help="LEAKY: split train/test by pair, so sibling pairs from the same turn "
                          "(same prompt, same chosen) land on both sides. Only for measuring how "
@@ -141,7 +154,8 @@ def main():
         gen = torch.Generator().manual_seed(seed)
 
         users = build_user_diffs(pairs, emb_lookup, args.min_pairs, args.test_frac, gen,
-                                 split_by_turn=not args.split_by_pair)
+                                 split_by_turn=not args.split_by_pair,
+                                 max_pairs=args.max_pairs)
         uids = sorted(users)
         if not uids:
             print("No users met the threshold; nothing to run."); return
