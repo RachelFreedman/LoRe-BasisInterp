@@ -93,9 +93,19 @@ def report_stats(counts, en):
           "PRISM had ~15 and nulled out.)")
 
 
-def build_pairs(en, counts, min_pairs):
-    """Emit (user, prompt, chosen, rejected) for users clearing the threshold."""
-    keep = set(counts[counts >= min_pairs].index)
+def build_pairs(en, counts, min_pairs, max_users=None, max_pairs_per_user=None, seed=0):
+    """Emit (user, prompt, chosen, rejected) for users clearing the threshold.
+
+    max_users / max_pairs_per_user bound the embedding cost: every pair needs its two sides embedded
+    through an 8B model, so the full set (941 users x ~200 pairs) would be ~250k forward passes.
+    Users are sampled at random (not top-N by count) so the sample is not biased toward the most
+    prolific annotators.
+    """
+    eligible = counts[counts >= min_pairs]
+    if max_users and len(eligible) > max_users:
+        eligible = eligible.sample(n=max_users, random_state=seed)
+    keep = set(eligible.index)
+    per_user = {}
     out = []
     for _, row in en.iterrows():
         uid = row["annotator_id"]
@@ -107,13 +117,19 @@ def build_pairs(en, counts, min_pairs):
             if pref is None or prompt is None:
                 continue
             responses = {L: _clean(row.get(f"{t}_turn_response_{L}")) for L in LETTERS}
-            # `preferred_response` may be a letter ('a') or the response text itself.
-            chosen = responses.get(pref.lower()) if len(pref) == 1 else pref
+            # preferred_response is stored as "response_a".."response_d" (verified against the
+            # data: value_counts gives response_d 31179 / response_a 26849 / ...), so map it back
+            # to the matching response column. Anything else is unusable, so skip the turn.
+            letter = pref.lower().replace("response_", "").strip()
+            chosen = responses.get(letter)
             if chosen is None:
                 continue
             for L, text in responses.items():
                 if text is None or text == chosen:
                     continue
+                if max_pairs_per_user and per_user.get(uid, 0) >= max_pairs_per_user:
+                    break
+                per_user[uid] = per_user.get(uid, 0) + 1
                 # Guard against the PRISM formatting artifact: both sides must be plain strings.
                 assert isinstance(chosen, str) and isinstance(text, str), \
                     "chosen/rejected must both be plain strings (see the PRISM list-vs-string bug)"
@@ -134,6 +150,11 @@ def main():
         os.path.dirname(os.path.abspath(__file__)), "..", "data", "community_alignment"))
     ap.add_argument("--min_pairs", type=int, default=100,
                     help="keep users with at least this many pairs (>=50 per synthetic_recovery.py)")
+    ap.add_argument("--max_users", type=int, default=None,
+                    help="randomly sample at most this many eligible users (bounds embedding cost)")
+    ap.add_argument("--max_pairs_per_user", type=int, default=None,
+                    help="cap pairs kept per user (bounds embedding cost)")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--stats", action="store_true", help="report the distribution and exit")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
@@ -153,7 +174,8 @@ def main():
               file=sys.stderr)
         sys.exit(2)
 
-    pairs = build_pairs(en, counts, args.min_pairs)
+    pairs = build_pairs(en, counts, args.min_pairs, args.max_users,
+                        args.max_pairs_per_user, args.seed)
     out = args.out or os.path.join(args.cache_dir, f"pairs_min{args.min_pairs}.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
