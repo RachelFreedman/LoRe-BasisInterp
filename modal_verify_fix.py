@@ -1,9 +1,8 @@
 """
 Modal runner: verify that fixing the string-vs-list formatting bug removes basis collapse.
 
-Rachel's directive (@everyone): "Verify that fixing this bug on your shared code also fixes the
-basis collapse... Run a few seeds and check whether LoRe's accuracy is on average better than that
-of the base RM."
+What this checks: "Verify that fixing this bug on the shared code also fixes the basis collapse...
+Run a few seeds and check whether LoRe's accuracy is on average better than that of the base RM."
 
 The bug (confirmed on our code):
   * PRISM/prepare.py stored chosen_utterance as a string but rejected_utterance as a LIST.
@@ -16,7 +15,7 @@ Both files are now fixed to embed a single rejected string, formatted identicall
 This runner regenerates the embeddings WITH the fix, then measures, across seeds:
   1. basis collapse  (multiseed_collapse.py: min|cos| between columns, s2/s1, bases kept, test acc)
   2. base-RM accuracy on the FIXED embeddings (test_base_rm_accuracy.py)
-So we can answer both of Rachel's questions: did collapse go away, and does LoRe beat the base RM.
+So we can answer both questions: did collapse go away, and does LoRe beat the base RM.
 
 The fixed embeddings are committed to the "lore-prism-data" volume at data/prism/*.pkl. To pull
 them locally for further CPU analysis:  modal volume get lore-prism-data data/prism/train_embeddings.pkl

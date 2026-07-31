@@ -1,9 +1,9 @@
 """
 Community Alignment -> LoRe-format preference pairs, filtered for English and data-rich users.
 
-Motivation (Rachel): "Find another multi-user preference dataset where there's more data per user
-(I suggest Community Alignment, filtered for english language and users with > some large number of
-datapoints each). See if you can modify LoRe to get it to work on there."
+The goal: "Find another multi-user preference dataset where there's more data per user (Community
+Alignment, filtered for english language and users with > some large number of datapoints each).
+See if you can modify LoRe to get it to work on there."
 
 Why the threshold matters: synthetic_recovery.py shows LoRe has a sharp phase transition around
 ~50 pairs/user -- below ~25 it cannot recover even clean, orthogonal, planted axes, and above ~100 it

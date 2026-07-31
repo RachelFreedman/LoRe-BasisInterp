@@ -1,7 +1,7 @@
 """
 Positive control: can LoRe recover KNOWN preference axes when the signal definitely exists?
 
-Motivation (Rachel): "Try constructing a synthetic dataset with really clearly defined axes of
+The question being tested: "Construct a synthetic dataset with really clearly defined axes of
 variation and tons of data per user, and see if LoRe can pick them up."
 
 This is the experiment that has to come before anything else: PRISM gave a null, but a null is only

@@ -1,8 +1,8 @@
 """
 Can LoRe recover KNOWN, human-interpretable preference axes from REAL Skywork embeddings?
 
-Rachel: "Try constructing a synthetic dataset with really clearly defined axes of variation and tons
-of data per user, and see if LoRe can pick them up."
+The question being tested: "Construct a synthetic dataset with really clearly defined axes of
+variation and tons of data per user, and see if LoRe can pick them up."
 
 synthetic_recovery.py answered the abstract version of this (planted axes in R^d, Gaussian features)
 and showed LoRe recovers planted axes above ~50 pairs/user. But it generated feature vectors
