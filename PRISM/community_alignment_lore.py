@@ -110,83 +110,103 @@ def main():
     ap.add_argument("--iters", type=int, default=1500)
     ap.add_argument("--lr", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seeds", type=int, nargs="+", default=None,
+                    help="run several seeds and report mean +/- std. Each seed redraws BOTH the "
+                         "turn-level train/test split and the LoRe init, so the spread covers the "
+                         "two things that actually vary. Effect sizes here are small (~0.02), so a "
+                         "single seed cannot distinguish a real gap from split noise")
     ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results",
                                                   "community_alignment", "lore_results.csv"))
     args = ap.parse_args()
-
-    random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
-    gen = torch.Generator().manual_seed(args.seed)
+    seeds = args.seeds if args.seeds else [args.seed]
 
     with open(args.pairs) as f:
         pairs = json.load(f)
     blob = torch.load(args.emb, weights_only=False)
     emb_lookup = {k: blob["emb"][i] for i, k in enumerate(blob["keys"])}
     print(f"{len(pairs)} pairs, {len(emb_lookup)} embeddings")
-
-    users = build_user_diffs(pairs, emb_lookup, args.min_pairs, args.test_frac, gen,
-                             split_by_turn=not args.split_by_pair)
-    uids = sorted(users)
-    if not uids:
-        print("No users met the threshold; nothing to run."); return
-    npairs = [users[u][0].shape[0] + users[u][1].shape[0] for u in uids]
-    print(f"{len(uids)} users with >= {args.min_pairs} pairs "
-          f"(median {int(np.median(npairs))} pairs/user, max {max(npairs)})\n")
-
-    train_feats = [users[u][0] for u in uids]
-    test_feats = [users[u][1] for u in uids]
-
-    # ---- reference directions on held-out pairs ----
     head = unit(load_reward_head().reshape(-1))
-    global_dir = unit(torch.cat(train_feats, 0).mean(0))
-    base_acc, glob_acc, pers_acc, other_acc = [], [], [], []
-    for i, u in enumerate(uids):
-        te = test_feats[i]
-        base_acc.append(acc(te, head))
-        glob_acc.append(acc(te, global_dir))
-        pers_acc.append(acc(te, unit(train_feats[i].mean(0))))
-        j = random.choice([k for k in range(len(uids)) if k != i])
-        other_acc.append(acc(te, unit(train_feats[j].mean(0))))
-    m = lambda x: float(np.mean(x))
-    print("=== held-out reference directions ===")
-    print(f"  base_rm (true head)  : {m(base_acc):.4f}   <- the bar LoRe must clear")
-    print(f"  global_meandiff      : {m(glob_acc):.4f}")
-    print(f"  personal             : {m(pers_acc):.4f}")
-    print(f"  other_user (control) : {m(other_acc):.4f}")
-    print(f"  personal - global    : {m(pers_acc)-m(glob_acc):+.4f}")
-    print(f"  personal - other_user: {m(pers_acc)-m(other_acc):+.4f}   "
-          f"(>0 => user-specific signal)\n")
 
-    # ---- LoRe at several ranks ----
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     f = open(args.out, "w", newline="")
-    w = csv.DictWriter(f, fieldnames=["rank", "alpha", "train_acc", "test_acc", "min_abs_basis_cos",
-                                      "bases_kept", "base_rm", "global", "personal", "other_user",
-                                      "n_users", "median_pairs"])
+    w = csv.DictWriter(f, fieldnames=["seed", "rank", "alpha", "train_acc", "test_acc",
+                                      "min_abs_basis_cos", "bases_kept", "base_rm", "global",
+                                      "personal", "other_user", "n_users", "median_pairs"])
     w.writeheader()
 
-    print(f"{'rank':>5} | {'train':>7} | {'test':>7} | {'vs base':>8} | {'min|cos|':>8} | {'kept':>4}")
-    print("-" * 56)
-    for K in args.ranks:
-        anchor = load_reward_head().reshape(-1, 1)
-        model = LoRe_regularized(anchor, args.alpha, len(train_feats), 4096, K, args.iters, args.lr)
-        Wk, Vk = model.train(train_feats)
-        tr, te = eval_acc(Wk, Vk, train_feats), eval_acc(Wk, Vk, test_feats)
-        mc = collapse_metrics(model.V.detach().cpu())
-        print(f"{K:>5} | {tr:>7.4f} | {te:>7.4f} | {te-m(base_acc):>+8.4f} | {mc:>8.4f} | "
-              f"{Vk.shape[1]:>4}")
-        w.writerow({"rank": K, "alpha": args.alpha, "train_acc": round(tr, 4),
-                    "test_acc": round(te, 4), "min_abs_basis_cos": round(mc, 4),
-                    "bases_kept": Vk.shape[1], "base_rm": round(m(base_acc), 4),
-                    "global": round(m(glob_acc), 4), "personal": round(m(pers_acc), 4),
-                    "other_user": round(m(other_acc), 4), "n_users": len(uids),
-                    "median_pairs": int(np.median(npairs))})
-        f.flush()
+    refs = defaultdict(list)          # reference direction accuracies, per seed
+    lore = defaultdict(list)          # rank -> [(test_acc, vs_base, collapse), ...] per seed
+    for seed in seeds:
+        random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
+        gen = torch.Generator().manual_seed(seed)
+
+        users = build_user_diffs(pairs, emb_lookup, args.min_pairs, args.test_frac, gen,
+                                 split_by_turn=not args.split_by_pair)
+        uids = sorted(users)
+        if not uids:
+            print("No users met the threshold; nothing to run."); return
+        npairs = [users[u][0].shape[0] + users[u][1].shape[0] for u in uids]
+        train_feats = [users[u][0] for u in uids]
+        test_feats = [users[u][1] for u in uids]
+        if seed == seeds[0]:
+            print(f"{len(uids)} users with >= {args.min_pairs} pairs "
+                  f"(median {int(np.median(npairs))} pairs/user, max {max(npairs)})\n")
+
+        # ---- reference directions on held-out pairs ----
+        global_dir = unit(torch.cat(train_feats, 0).mean(0))
+        base_acc, glob_acc, pers_acc, other_acc = [], [], [], []
+        for i, u in enumerate(uids):
+            te = test_feats[i]
+            base_acc.append(acc(te, head))
+            glob_acc.append(acc(te, global_dir))
+            pers_acc.append(acc(te, unit(train_feats[i].mean(0))))
+            j = random.choice([k for k in range(len(uids)) if k != i])
+            other_acc.append(acc(te, unit(train_feats[j].mean(0))))
+        m = lambda x: float(np.mean(x))
+        for name, v in (("base_rm", base_acc), ("global", glob_acc),
+                        ("personal", pers_acc), ("other_user", other_acc)):
+            refs[name].append(m(v))
+
+        # ---- LoRe at several ranks ----
+        for K in args.ranks:
+            anchor = load_reward_head().reshape(-1, 1)
+            model = LoRe_regularized(anchor, args.alpha, len(train_feats), 4096, K,
+                                     args.iters, args.lr)
+            Wk, Vk = model.train(train_feats)
+            tr, te = eval_acc(Wk, Vk, train_feats), eval_acc(Wk, Vk, test_feats)
+            mc = collapse_metrics(model.V.detach().cpu())
+            lore[K].append((tr, te, te - m(base_acc), mc))
+            w.writerow({"seed": seed, "rank": K, "alpha": args.alpha, "train_acc": round(tr, 4),
+                        "test_acc": round(te, 4), "min_abs_basis_cos": round(mc, 4),
+                        "bases_kept": Vk.shape[1], "base_rm": round(m(base_acc), 4),
+                        "global": round(m(glob_acc), 4), "personal": round(m(pers_acc), 4),
+                        "other_user": round(m(other_acc), 4), "n_users": len(uids),
+                        "median_pairs": int(np.median(npairs))})
+            f.flush()
     f.close()
 
+    ms = lambda v: (float(np.mean(v)), float(np.std(v)))
+    print(f"\n=== held-out reference directions (mean +/- std over {len(seeds)} seeds) ===")
+    for name in ("base_rm", "global", "personal", "other_user"):
+        mu, sd = ms(refs[name])
+        print(f"  {name:<12}: {mu:.4f} +/- {sd:.4f}")
+    pg = np.array(refs["personal"]) - np.array(refs["global"])
+    po = np.array(refs["personal"]) - np.array(refs["other_user"])
+    print(f"  personal - global    : {pg.mean():+.4f} +/- {pg.std():.4f}")
+    print(f"  personal - other_user: {po.mean():+.4f} +/- {po.std():.4f}   "
+          f"(>0 and larger than its std => real user-specific signal)")
+
+    print(f"\n=== LoRe (alpha={args.alpha}), mean +/- std over {len(seeds)} seeds ===")
+    print(f"{'rank':>5} | {'test':>16} | {'vs base_rm':>18} | {'collapse':>16}")
+    print("-" * 66)
+    for K in args.ranks:
+        te = [r[1] for r in lore[K]]; vb = [r[2] for r in lore[K]]; mc = [r[3] for r in lore[K]]
+        print(f"{K:>5} | {np.mean(te):.4f} +/- {np.std(te):.4f} | "
+              f"{np.mean(vb):+.4f} +/- {np.std(vb):.4f} | {np.mean(mc):.4f} +/- {np.std(mc):.4f}")
     print(f"\nSaved {args.out}")
-    print("Read-out: LoRe beating base_rm AND personal > other_user => real personalization at this "
-          "data volume, so PRISM's null was about pairs-per-user. Both flat => the limitation is the "
-          "preference data/representation, not volume.")
+    print("Read-out: a gap only counts if it is larger than its std across seeds. LoRe beating "
+          "base_rm AND personal > other_user => real personalization at this data volume; both flat "
+          "=> the limitation is the preference data, not volume.")
 
 
 if __name__ == "__main__":
