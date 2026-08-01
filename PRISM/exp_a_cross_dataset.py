@@ -1,8 +1,8 @@
 """
-Experiment A: does the PRISM preference direction separate chosen/rejected in OTHER
+Experiment A: Does the PRISM preference direction separate chosen/rejected in OTHER
 preference datasets as well as in PRISM?
 
-Motivation: we showed a single direction separates PRISM, and characterized it only by cosine
+We showed a single direction separates PRISM, and characterized it only by cosine
 to concept vectors (correlational). Cross-dataset transfer turns that into a testable claim:
   * If the direction is a REAL generic-quality axis -> it should transfer, i.e. score chosen>rejected
     on other datasets roughly as well as the true reward head does.
@@ -17,13 +17,6 @@ We score three directions head-to-head on each dataset:
 How scoring works (reused from eval_rb2.py): render prompt+response with the chat template, take
 the last non-pad token hidden state of the Skywork backbone, and project onto each direction.
 Pairwise accuracy = fraction of pairs where chosen scores above rejected.
-
-Requires the Skywork backbone (GPU / Modal recommended). Nothing here is PRISM-specific except the
-directions themselves.
-
-Usage:
-  python exp_a_cross_dataset.py --datasets rewardbench2 ultrafeedback hh_rlhf --limit 500 \
-      --lore_ckpt ../reproduced_matrices/PRISM_V_lore_K_20_alpha_10000.0.pt
 """
 import argparse
 import os
