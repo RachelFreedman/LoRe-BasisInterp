@@ -57,9 +57,34 @@ import torch.nn.functional as F
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 sys.path.append(SCRIPT_DIR)
-from utils import LoRe_regularized                                    # noqa: E402
+from utils import (LoRe_regularized, LoReV2,                          # noqa: E402
+                   canonical_variation_axes)
 from synthetic_recovery import (subspace_alignment, best_axis_match,  # noqa: E402
                                 collapse_metrics, eval_acc, w_recovery)
+
+
+def signed_ground_truth(V_true):
+    """[F, n_concepts] -> [F, 2*n_concepts] laid out to match group_id = concept*2 + sign_i.
+
+    Users come in disagreeing pairs: sign_i=0 prefers HIGH-C (+c), sign_i=1 prefers LOW-C (-c).
+    Matching a user's reward direction has to respect that sign, otherwise a model that gets the
+    concept right but the direction backwards would score as correct.
+    """
+    cols = []
+    for i in range(V_true.shape[1]):
+        cols.append(V_true[:, i])
+        cols.append(-V_true[:, i])
+    return torch.stack(cols, dim=1)
+
+
+def group_dir_match(reward_dirs, group_id, V_signed):
+    """Fraction of users whose implied reward direction points at their own (concept, sign) group.
+
+    Sign-sensitive, so no .abs() here -- unlike reward_dir_match in synthetic_recovery.py, where
+    the planted axes are unsigned.
+    """
+    sim = F.normalize(reward_dirs, dim=1) @ F.normalize(V_signed, dim=0)
+    return (sim.argmax(1) == group_id).float().mean().item()
 
 # Mutually-distinct axes (greedy selection, max |cos| <= 0.68), avoiding the quality cluster.
 DEFAULT_CONCEPTS = ["fluency", "repetition", "confidence", "creativity", "formatting", "diversity"]
@@ -190,11 +215,24 @@ def main():
                     help="rank given to LoRe (default: 2 x #concepts, to allow +/- directions)")
     ap.add_argument("--alpha", type=float, default=0.0)
     ap.add_argument("--iters", type=int, default=1500)
-    ap.add_argument("--lr", type=float, default=0.5)
+    ap.add_argument("--lr", type=float, default=None,
+                    help="default 0.5 for vanilla (as published), 1e-2 for v2")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
-    ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results", "synthetic",
-                                                  "concept_users.csv"))
+    ap.add_argument("--model", choices=["vanilla", "v2"], default="vanilla",
+                    help="vanilla = LoRe_regularized; v2 = LoReV2 (signed wbar+delta weights, "
+                         "reward-space ridge)")
+    ap.add_argument("--lam_pop", type=float, default=0.01, help="v2 only: ridge on ||V wbar||^2")
+    ap.add_argument("--lam_d", type=float, default=0.01, help="v2 only: ridge on ||V delta_u||^2")
+    ap.add_argument("--out", default=None,
+                    help="default: results/synthetic/concept_users{,_v2}.csv -- kept separate per "
+                         "model so a v2 run never clobbers the committed vanilla baseline")
     args = ap.parse_args()
+    if args.lr is None:
+        args.lr = 1e-2 if args.model == "v2" else 0.5
+    if args.out is None:
+        suffix = "_v2" if args.model == "v2" else ""
+        args.out = os.path.join(SCRIPT_DIR, "..", "results", "synthetic",
+                                f"concept_users{suffix}.csv")
 
     emb = torch.load(args.emb, weights_only=False)
     cvs = torch.load(args.concept_vectors, weights_only=False)
@@ -205,6 +243,7 @@ def main():
     k_fit = args.k_fit or 2 * len(concepts)
 
     V_true = ground_truth_matrix(cvs, concepts)
+    V_signed = signed_ground_truth(V_true)
     n_pairs = emb[concepts[0]]["high"].shape[0]
     n_groups = 2 * len(concepts)
     print(f"Concepts ({len(concepts)}): {concepts}")
@@ -218,13 +257,13 @@ def main():
     f = open(args.out, "w", newline="")
     w = csv.DictWriter(f, fieldnames=["seed", "train_acc", "test_acc", "subspace_align",
                                       "best_axis_match", "min_abs_basis_cos", "w_recovery",
-                                      "personal", "global", "other_group",
+                                      "group_dir_match", "personal", "global", "other_group",
                                       "global_dir_norm"])
     w.writeheader()
 
     print(f"{'seed':>4} | {'test_acc':>8} | {'subspace':>8} | {'axis':>6} | {'min|cos|':>8} | "
-          f"{'w_recov':>7} | {'personal':>8} | {'global':>7} | {'other':>7}")
-    print("-" * 86)
+          f"{'w_recov':>7} | {'usr->grp':>8} | {'personal':>8} | {'global':>7} | {'other':>7}")
+    print("-" * 97)
     rows = []
     for seed in args.seeds:
         set_seed(seed)
@@ -233,28 +272,44 @@ def main():
             emb, concepts, args.users_per_group, args.test_frac, gen, args.high_frac,
             args.subset_frac)
 
-        anchor = torch.cat(train_feats, 0).mean(0).reshape(-1, 1)
-        model = LoRe_regularized(anchor, args.alpha, len(train_feats), V_true.shape[0],
-                                 k_fit, args.iters, args.lr)
-        Wk, Vk = model.train(train_feats)
-        V_full = model.V.detach().cpu()
+        if args.model == "v2":
+            model = LoReV2(len(train_feats), V_true.shape[0], k_fit, lam_pop=args.lam_pop,
+                           lam_d=args.lam_d, num_iterations=args.iters,
+                           learning_rate=args.lr, verbose=False)
+            Wk, Vk = model.train(train_feats)
+            V_raw = model.V.detach().cpu()
+            # signed weights leave V identified only up to an invertible transform -- canonicalize
+            # to the (varimax-rotated) principal axes of user variation before any per-axis metric
+            V_axes, _, _ = canonical_variation_axes(model.V, model.delta, k=k_fit)
+            W_assign, signed = (model.delta.detach().cpu() @ V_raw.T) @ V_axes, True
+            r_dirs = model.reward_dirs().detach().cpu().T
+        else:
+            anchor = torch.cat(train_feats, 0).mean(0).reshape(-1, 1)
+            model = LoRe_regularized(anchor, args.alpha, len(train_feats), V_true.shape[0],
+                                     k_fit, args.iters, args.lr)
+            Wk, Vk = model.train(train_feats)
+            V_raw = V_axes = model.V.detach().cpu()
+            W_assign, signed = model.W, False
+            r_dirs = (Vk.detach().cpu() @ Wk.detach().cpu().T).T
 
         pers, glob, oth, gnorm = personal_vs_global(train_feats, test_feats, group_id)
         row = {
             "seed": seed,
             "train_acc": eval_acc(Wk, Vk, train_feats),
             "test_acc": eval_acc(Wk, Vk, test_feats),
-            "subspace_align": subspace_alignment(V_full, V_true),
-            "best_axis_match": best_axis_match(V_full, V_true),
-            "min_abs_basis_cos": collapse_metrics(V_full),
-            "w_recovery": w_recovery(model.W, group_id, n_groups),
+            "subspace_align": subspace_alignment(V_axes, V_true),
+            "best_axis_match": best_axis_match(V_axes, V_true),
+            "min_abs_basis_cos": collapse_metrics(V_raw),
+            "w_recovery": w_recovery(W_assign, group_id, n_groups, signed=signed),
+            "group_dir_match": group_dir_match(r_dirs, group_id, V_signed),
             "personal": pers, "global": glob, "other_group": oth,
             "global_dir_norm": gnorm,
         }
         rows.append(row); w.writerow(row); f.flush()
         print(f"{seed:>4} | {row['test_acc']:>8.4f} | {row['subspace_align']:>8.4f} | "
               f"{row['best_axis_match']:>6.4f} | {row['min_abs_basis_cos']:>8.4f} | "
-              f"{row['w_recovery']:>7.4f} | {pers:>8.4f} | {glob:>7.4f} | {oth:>7.4f}")
+              f"{row['w_recovery']:>7.4f} | {row['group_dir_match']:>8.4f} | "
+              f"{pers:>8.4f} | {glob:>7.4f} | {oth:>7.4f}")
     f.close()
 
     m = lambda k: float(np.mean([r[k] for r in rows]))

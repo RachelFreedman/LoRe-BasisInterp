@@ -47,7 +47,7 @@ import torch.nn.functional as F
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 sys.path.append(SCRIPT_DIR)
-from utils import LoRe_regularized  # noqa: E402
+from utils import LoRe_regularized, LoReV2, canonical_variation_axes  # noqa: E402
 
 
 def set_seed(s):
@@ -123,10 +123,17 @@ def eval_acc(W, V, feats):
                           for i, X in enumerate(feats)]))
 
 
-def w_recovery(W_learned, dom_true, k_true):
+def w_recovery(W_learned, dom_true, k_true, signed=False):
     """Do users who share a true dominant axis get assigned the same learned basis?
-    Greedy-match learned argmax basis -> true axis, then report agreement (chance = 1/k_true)."""
-    pred = W_learned.detach().cpu().argmax(1).numpy()
+    Greedy-match learned argmax basis -> true axis, then report agreement (chance = 1/k_true).
+
+    signed=True for LoReV2: its weights are signed and centred on zero, so the dominant basis is
+    the largest-MAGNITUDE component (a strongly negative weight is just as much "this user cares
+    about this axis" as a positive one). A plain argmax would silently pick the least-negative
+    entry instead. Pass the delta (individual variation), not wbar + delta.
+    """
+    W_learned = W_learned.detach().cpu()
+    pred = (W_learned.abs() if signed else W_learned).argmax(1).numpy()
     true = dom_true.numpy()
     # build contingency and greedily match
     ks = sorted(set(pred.tolist())); ts = sorted(set(true.tolist()))
@@ -144,6 +151,20 @@ def w_recovery(W_learned, dom_true, k_true):
     return matched / len(true)
 
 
+def reward_dir_match(reward_dirs, dom_true, V_true):
+    """Fraction of users whose IMPLIED reward direction points at their true axis (chance 1/k).
+
+    This is the read-out that actually survives the change of parameterization. best_axis_match
+    compares learned basis COLUMNS to planted axes, which presumes the columns are individually
+    identified -- true for vanilla (the simplex constraint pins them down) but false for v2, whose
+    signed weights leave V determined only up to an invertible transform. Asking instead "does the
+    model point each user at the right axis?" is invariant to that transform, so it compares the
+    two models fairly.
+    """
+    sim = F.normalize(reward_dirs, dim=1) @ F.normalize(V_true, dim=0)   # [n_users, k_true]
+    return (sim.abs().argmax(1) == dom_true).float().mean().item()
+
+
 def run_one(pairs_per_user, args, seed):
     gen = torch.Generator().manual_seed(seed)
     set_seed(seed)
@@ -158,23 +179,44 @@ def run_one(pairs_per_user, args, seed):
         train.append(make_pairs(pairs_per_user, r_u, d, gen, args.noise, args.signal))
         test.append(make_pairs(args.test_pairs, r_u, d, gen, args.noise, args.signal))
 
-    # anchor for the regularizer: the population-mean direction (analogue of v_sft)
-    anchor = torch.cat(train, 0).mean(0).reshape(-1, 1)
-
-    model = LoRe_regularized(anchor, args.alpha, n_users, d, args.k_fit,
-                             args.iters, args.lr)
-    Wk, Vk = model.train(train)
-    V_full = model.V.detach().cpu()
+    if args.model == "v2":
+        model = LoReV2(n_users, d, args.k_fit, lam_pop=args.lam_pop, lam_d=args.lam_d,
+                       num_iterations=args.iters, learning_rate=args.lr, verbose=False)
+        Wk, Vk = model.train(train)
+        V_raw = model.V.detach().cpu()
+        # v2's raw basis columns are NOT individually identified: the reward-space ridge
+        # constrains the products V@wbar and V@delta_u, so any V -> VR, w -> R^-1 w leaves both
+        # the loss and the penalty unchanged. Per-column metrics on V_raw are therefore
+        # meaningless for v2. Canonicalize to the principal axes of across-user reward variation
+        # first -- those ARE identified, and they are what "areas of variation" means.
+        axes, _, _ = canonical_variation_axes(model.V, model.delta, k=args.k_fit)
+        V_axes = axes
+        W_assign = (model.delta.detach().cpu() @ V_raw.T) @ axes   # user coords in canonical basis
+        signed = True
+        r_dirs = model.reward_dirs().detach().cpu().T              # [n_users, d]
+    else:
+        # anchor for the regularizer: the population-mean direction (analogue of v_sft)
+        anchor = torch.cat(train, 0).mean(0).reshape(-1, 1)
+        model = LoRe_regularized(anchor, args.alpha, n_users, d, args.k_fit,
+                                 args.iters, args.lr)
+        Wk, Vk = model.train(train)
+        # vanilla's simplex weights pin down the columns, so V is already the axis estimate
+        V_raw = V_axes = model.V.detach().cpu()
+        W_assign, signed = model.W, False
+        r_dirs = (Vk.detach().cpu() @ Wk.detach().cpu().T).T       # [n_users, d]
 
     return {
         "pairs_per_user": pairs_per_user,
         "seed": seed,
         "test_acc": eval_acc(Wk, Vk, test),
         "train_acc": eval_acc(Wk, Vk, train),
-        "subspace_align": subspace_alignment(V_full, V_true),
-        "best_axis_match": best_axis_match(V_full, V_true),
-        "min_abs_basis_cos": collapse_metrics(V_full),
-        "w_recovery": w_recovery(model.W, dom, k_true),
+        "subspace_align": subspace_alignment(V_axes, V_true),
+        "best_axis_match": best_axis_match(V_axes, V_true),
+        # collapse is a property of the fitted bases themselves, so always read it off the raw V
+        # (canonical axes are orthonormal by construction and would report ~0 trivially)
+        "min_abs_basis_cos": collapse_metrics(V_raw),
+        "w_recovery": w_recovery(W_assign, dom, k_true, signed=signed),
+        "reward_dir_match": reward_dir_match(r_dirs, dom, V_true),
     }
 
 
@@ -191,16 +233,31 @@ def main():
     ap.add_argument("--signal", type=float, default=1.0, help="scale of the true-direction component")
     ap.add_argument("--concentration", type=float, default=1.0,
                     help="1.0 = each user cares about exactly one axis")
-    ap.add_argument("--alpha", type=float, default=0.0)
+    ap.add_argument("--model", choices=["vanilla", "v2"], default="vanilla",
+                    help="vanilla = LoRe_regularized (simplex weights, V_sft anchor, column "
+                         "dropping); v2 = LoReV2 (signed wbar+delta weights, reward-space ridge)")
+    ap.add_argument("--alpha", type=float, default=0.0, help="vanilla only: V_sft anchor strength")
+    ap.add_argument("--lam_pop", type=float, default=0.01, help="v2 only: ridge on ||V wbar||^2")
+    ap.add_argument("--lam_d", type=float, default=0.01, help="v2 only: ridge on ||V delta_u||^2")
     ap.add_argument("--iters", type=int, default=1500)
-    ap.add_argument("--lr", type=float, default=0.5)
+    ap.add_argument("--lr", type=float, default=None,
+                    help="default 0.5 for vanilla (as published), 1e-2 for v2")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
-    ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results", "synthetic",
-                                                  "synthetic_recovery.csv"))
+    ap.add_argument("--out", default=None,
+                    help="default: results/synthetic/synthetic_recovery{,_v2}.csv -- kept separate "
+                         "per model so a v2 run never clobbers the committed vanilla baseline")
     args = ap.parse_args()
+    if args.lr is None:
+        args.lr = 1e-2 if args.model == "v2" else 0.5
+    if args.out is None:
+        suffix = "_v2" if args.model == "v2" else ""
+        args.out = os.path.join(SCRIPT_DIR, "..", "results", "synthetic",
+                                f"synthetic_recovery{suffix}.csv")
 
-    print(f"Synthetic positive control: d={args.dim}, {args.k_true} planted axes, "
-          f"{args.n_users} users, k_fit={args.k_fit}, alpha={args.alpha}, "
+    reg = (f"lam_pop={args.lam_pop}, lam_d={args.lam_d}" if args.model == "v2"
+           else f"alpha={args.alpha}")
+    print(f"Synthetic positive control [{args.model}]: d={args.dim}, {args.k_true} planted axes, "
+          f"{args.n_users} users, k_fit={args.k_fit}, {reg}, lr={args.lr}, "
           f"label noise={args.noise}, concentration={args.concentration}")
     print(f"Chance accuracy = 0.5 ; ceiling given label noise = {1 - args.noise:.2f}")
     print(f"w_recovery chance = {1/args.k_true:.2f}\n")
@@ -209,20 +266,21 @@ def main():
     f = open(args.out, "w", newline="")
     w = csv.DictWriter(f, fieldnames=["pairs_per_user", "seed", "train_acc", "test_acc",
                                       "subspace_align", "best_axis_match",
-                                      "min_abs_basis_cos", "w_recovery"])
+                                      "min_abs_basis_cos", "w_recovery", "reward_dir_match"])
     w.writeheader()
 
     print(f"{'pairs/user':>10} | {'test_acc':>8} | {'subspace':>8} | {'axis_match':>10} | "
-          f"{'min|cos|':>8} | {'w_recov':>7}")
-    print("-" * 68)
+          f"{'min|cos|':>8} | {'w_recov':>7} | {'user->axis':>10}")
+    print("-" * 82)
     for p in args.pairs:
         rows = [run_one(p, args, s) for s in args.seeds]
         w.writerows(rows); f.flush()
         agg = {k: np.mean([r[k] for r in rows]) for k in
-               ("test_acc", "subspace_align", "best_axis_match", "min_abs_basis_cos", "w_recovery")}
+               ("test_acc", "subspace_align", "best_axis_match", "min_abs_basis_cos",
+                "w_recovery", "reward_dir_match")}
         print(f"{p:>10} | {agg['test_acc']:>8.4f} | {agg['subspace_align']:>8.4f} | "
               f"{agg['best_axis_match']:>10.4f} | {agg['min_abs_basis_cos']:>8.4f} | "
-              f"{agg['w_recovery']:>7.4f}")
+              f"{agg['w_recovery']:>7.4f} | {agg['reward_dir_match']:>10.4f}")
     f.close()
 
     print(f"\nSaved {args.out}")
