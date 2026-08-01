@@ -122,34 +122,44 @@ def main():
     # null PER CONCEPT: each concept vector sits differently relative to the embedding cone, so a
     # single shared threshold would be wrong. For each concept, the 95th percentile of |r| between
     # that concept's scores and n_null random directions' scores.
-    null_resp_c, null_diff_c = {}, {}
+    # Report the null DISTRIBUTION, not just its 95th percentile. A direction can sit far above the
+    # random median -- i.e. genuinely more concept-aligned than chance -- while still failing a
+    # 5% threshold, and reporting only "below p95" would call that "not aligned", which is wrong.
+    null_resp_c, null_diff_c, null_med_c, null_dist_c = {}, {}, {}, {}
     for j, c in enumerate(concepts):
         dc = S_c[ci, j] - S_c[ri, j]
-        null_resp_c[c] = float(np.quantile(
-            [abs(r(S_r[:, k], S_c[:, j])) for k in range(args.n_null)], 0.95))
-        null_diff_c[c] = float(np.quantile(
-            [abs(r(S_r[ci, k] - S_r[ri, k], dc)) for k in range(args.n_null)], 0.95))
+        nr = np.array([abs(r(S_r[:, k], S_c[:, j])) for k in range(args.n_null)])
+        nd = np.array([abs(r(S_r[ci, k] - S_r[ri, k], dc)) for k in range(args.n_null)])
+        null_resp_c[c] = float(np.quantile(nr, 0.95))
+        null_diff_c[c] = float(np.quantile(nd, 0.95))
+        null_med_c[c] = float(np.median(nd))
+        null_dist_c[c] = nd
     print(f"\nnull |r| computed per concept vs {args.n_null} random directions "
           f"(response {min(null_resp_c.values()):.2f}-{max(null_resp_c.values()):.2f}, "
           f"diff {min(null_diff_c.values()):.2f}-{max(null_diff_c.values()):.2f})\n")
 
-    print(f"{'concept':<14} | {'wbar RESPONSE':>16} | {'head':>7} | {'null':>5} | "
-          f"{'wbar DIFF':>16} | {'head':>7} | {'null':>5}")
-    print("-" * 92)
+    print("DIFF view (decision-relevant). pctile = where the direction falls inside the random")
+    print("distribution; * = clears the 95th percentile.\n")
+    print(f"{'concept':<14} | {'wbar':>16} | {'pctile':>6} | {'head':>7} | {'pctile':>6} | "
+          f"{'null med':>8} | {'null p95':>8}")
+    print("-" * 88)
     order = sorted(concepts, key=lambda c: -abs(np.mean(per_seed[c]["diff"])))
     for c in order:
         a = np.array(per_seed[c]["resp"]); b = np.array(per_seed[c]["diff"])
-        null_resp, null_diff = null_resp_c[c], null_diff_c[c]
-        sa = "*" if abs(a.mean()) > null_resp else " "
+        null_resp, null_diff, nd = null_resp_c[c], null_diff_c[c], null_dist_c[c]
+        pw = float((nd < abs(b.mean())).mean() * 100)
+        ph = float((nd < abs(head_row[c][1])).mean() * 100)
         sb = "*" if abs(b.mean()) > null_diff else " "
-        print(f"{c:<14} | {a.mean():+.3f}{sa} +/- {a.std():.3f} | {head_row[c][0]:+.3f} "
-              f"| {null_resp:.3f} | {b.mean():+.3f}{sb} +/- {b.std():.3f} | "
-              f"{head_row[c][1]:+.3f} | {null_diff:.3f}")
+        sh = "*" if abs(head_row[c][1]) > null_diff else " "
+        print(f"{c:<14} | {b.mean():+.3f}{sb} +/- {b.std():.3f} | {pw:>5.1f}% | "
+              f"{head_row[c][1]:+.3f}{sh} | {ph:>5.1f}% | {null_med_c[c]:>8.3f} | {null_diff:>8.3f}")
         rows.append({"concept": c, "wbar_response_r": round(a.mean(), 4),
                      "wbar_response_std": round(a.std(), 4),
                      "head_response_r": round(head_row[c][0], 4),
                      "wbar_diff_r": round(b.mean(), 4), "wbar_diff_std": round(b.std(), 4),
-                     "head_diff_r": round(head_row[c][1], 4),
+                     "wbar_diff_pctile": round(pw, 1),
+                     "head_diff_r": round(head_row[c][1], 4), "head_diff_pctile": round(ph, 1),
+                     "null_diff_median": round(null_med_c[c], 4),
                      "null_response": round(null_resp, 4), "null_diff": round(null_diff, 4)})
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
