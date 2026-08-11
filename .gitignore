@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 .DS_Store
 test_activations.py
+/data/community_alignment/embeddings.pt
+/data/community_alignment/pairs.json
+/data/multipref/embeddings.pt
+/data/multipref/pairs.json
+/data/multipref/multipref.parquet
