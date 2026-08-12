@@ -148,6 +148,10 @@ def main():
                          "single seed cannot distinguish a real gap from split noise")
     ap.add_argument("--out", default=os.path.join(SCRIPT_DIR, "..", "results",
                                                   "community_alignment", "lore_results.csv"))
+    ap.add_argument("--save_model", default=None,
+                    help="v2 only: save the learned matrices (V, wbar, per-user delta) for each "
+                         "(seed, rank) to this .pt path, for offline analysis of the population "
+                         "direction V@wbar and the per-user weights wbar+delta_u")
     args = ap.parse_args()
     if args.lr is None:
         args.lr = 1e-2 if args.model == "v2" else 0.5
@@ -170,6 +174,7 @@ def main():
 
     refs = defaultdict(list)          # reference direction accuracies, per seed
     lore = defaultdict(list)          # rank -> [(test_acc, vs_base, collapse), ...] per seed
+    saved_models = []                 # populated only when --save_model is set (v2)
     for seed in seeds:
         random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
         gen = torch.Generator().manual_seed(seed)
@@ -226,6 +231,17 @@ def main():
                     model.wbar.detach().unsqueeze(0).repeat(len(train_feats), 1),
                     Vk, test_feats), 4)
             mc = collapse_metrics(model.V.detach().cpu())
+            if args.save_model and args.model == "v2":
+                V = model.V.detach().cpu()
+                wbar = model.wbar.detach().cpu()
+                delta = model.delta.detach().cpu()
+                saved_models.append({
+                    "seed": seed, "rank": K, "uids": list(uids),
+                    "V": V, "wbar": wbar, "delta": delta,          # raw learned matrices
+                    "wbar_dir": (V @ wbar),                        # [4096] shared population direction
+                    "lam_pop": args.lam_pop, "lam_d": args.lam_d,
+                    "lr": args.lr, "min_pairs": args.min_pairs,
+                })
             lore[K].append((tr, te, te - m(base_acc), mc))
             w.writerow({"seed": seed, "rank": K, "alpha": args.alpha, "train_acc": round(tr, 4),
                         "test_acc": round(te, 4), "min_abs_basis_cos": round(mc, 4),
@@ -235,6 +251,15 @@ def main():
                         "median_pairs": int(np.median(npairs)), "wbar_only": wbar_only})
             f.flush()
     f.close()
+
+    if args.save_model:
+        if not saved_models:
+            print("[warn] --save_model set but nothing saved (requires --model v2)", file=sys.stderr)
+        else:
+            os.makedirs(os.path.dirname(os.path.abspath(args.save_model)), exist_ok=True)
+            torch.save({"records": saved_models, "pairs": os.path.abspath(args.pairs),
+                        "emb": os.path.abspath(args.emb)}, args.save_model)
+            print(f"Saved {len(saved_models)} learned matrices (seed x rank) -> {args.save_model}")
 
     ms = lambda v: (float(np.mean(v)), float(np.std(v)))
     print(f"\n=== held-out reference directions (mean +/- std over {len(seeds)} seeds) ===")

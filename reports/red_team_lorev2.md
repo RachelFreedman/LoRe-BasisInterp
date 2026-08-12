@@ -1,8 +1,10 @@
-# Red-team: LoReV2 on Community Alignment
+# Red-team: LoReV2 — Community Alignment (Part 1) + MultiPref (Part 2)
 
 Ifesi — branch `prism-dataset-analysis`
 
-**Target claim (Mohamed's).** LoReV2 beats the base Skywork RM by ~+0.03 on Community Alignment, and that gain is a single shared population direction (`wbar`) — the per-user personalization deltas add nothing. "Individuals don't matter much here."
+**Target claim (Mohamed's).** LoReV2 beats the base Skywork RM by ~+0.03, and that gain is a single shared population direction (`wbar`) — the per-user personalization deltas add nothing. "Individuals don't matter much here." Part 1 challenges this within Community Alignment; Part 2 re-tests it on an independent dataset (MultiPref) and inspects the learned matrix directly.
+
+# Part 1 — Community Alignment
 
 All runs: LoReV2, rank 8, 5 seeds, leak-free turn-level split, 200 users (median 180 pairs/user). Producing script: `PRISM/community_alignment_lore.py`. Full run log: `results/community_alignment/redteam_sweep.log`.
 
@@ -31,3 +33,38 @@ All runs: LoReV2, rank 8, 5 seeds, leak-free turn-level split, 200 users (median
 | Full run log (all 3) | `results/community_alignment/redteam_sweep.log` | — |
 
 Key CSV columns: `test_acc`, `wbar_only` (deltas zeroed), `base_rm`/`global`/`personal`/`other_user` (reference directions), `min_abs_basis_cos` (delta collapse).
+
+# Part 2 — MultiPref (independent dataset)
+
+**Why this dataset.** `allenai/multipref` is a different kind of data and structure: 10,461 single-turn prompts, each judged by ~4 different people (2 are experts and the other 2 are regular people), two answers from different models, a 5-point better/worse label (ties dropped). It's a second, independent test of whether individuals matter. After dropping ties, 179 users have ≥50 pairs each (median 122, max 639). Kept fully separate: data goes in `data/multipref/`, results in `results/multipref/` — nothing here touches the Community Alignment results.
+
+Same setup as Part 1: LoReV2, rank 8, 5 seeds, leak-free split, lr 1e-4, lam_pop 0.01, lam_d 10, 29,674 pairs.
+
+## What was done
+
+- **One script runs everything.** `PRISM/multipref/run.sh` does three steps in order: build the pairs, embed them with Skywork, then train LoReV2 and save the learned matrix. Anyone can run it — it uses a local copy of the data if there is one, otherwise downloads it.
+- **Same accuracy checks as Part 1** (does LoReV2 beat the base model, does the per-user part add anything).
+- **New — look at the matrix directly.** Loaded the saved matrix (no retraining) to see if it points one way, and whether the per-user parts are all basically the same thing.
+
+## Results
+
+- **Same accuracy result as Part 1.** LoReV2 beats the base model by **+0.0384 ± 0.0059**. The per-user part adds nothing over the shared direction (`personal − global = −0.0031 ± 0.0033`). Users beat a random other user by a hair (`+0.0064 ± 0.0028`), but that never turns into beating the shared direction.
+- **Everyone ends up pointing the same way.** Each user's direction lines up almost exactly with the one shared direction (overlap **0.9999–1.0000** for all 179 users). The personal part is tiny — about **1%** of the size of the shared part.
+- **The per-user parts are basically one thing.** The table of per-user offsets is almost a single line: one piece holds **83–96%** of it in 4 of 5 runs. So it's one small tweak turned up or down per user, not 179 different tastes. (One run spreads more, but its offsets are the smallest of all — just noise.)
+- **One caveat — the shared direction isn't the same from run to run.** The 8-column basis isn't itself small, and the shared direction changes between random seeds (overlap 0.28–0.71 as a vector, 0.07–0.18 as a subspace — low). Each run finds a different direction that works just as well. So don't read too much into any single learned direction. This doesn't bring back personalization, though — in every run the per-user part is still tiny and basically one line.
+
+**Verdict:** on MultiPref, a different dataset with many judges, the result is the same. The gain is one shared direction; the per-user part barely does anything, and if anything there's less personal signal here than in Community Alignment. One thing to keep in mind: the shared direction isn't stable across runs, so be careful before calling any single direction meaningful.
+
+## Artifacts
+
+| Item | Path | Produced by |
+|---|---|---|
+| Preference pairs | `data/multipref/pairs.json` (gitignored) | `PRISM/multipref/multipref_prep.py` |
+| Skywork embeddings | `data/multipref/embeddings.pt` (gitignored) | `PRISM/embed_community_alignment.py` |
+| Accuracy CSV | `results/multipref/repro_lamd10.csv` | `PRISM/community_alignment_lore.py` |
+| **Learned matrix** (V, wbar, per-user delta, wbar_dir; 5 seeds) | `results/multipref/lorev2_matrix_lamd10.pt` | `PRISM/community_alignment_lore.py --save_model` |
+| Run log | `results/multipref/savepass.log` | — |
+
+Scripts: `PRISM/multipref/run.sh` (orchestrates all three steps) · `PRISM/multipref/multipref_prep.py` (dataset → pairs) · `PRISM/community_alignment_lore.py` (trains LoReV2, writes the CSV and, with `--save_model`, the matrix) · **`PRISM/multipref/analyze_matrix.py`** (loads the saved matrix and prints every collapse metric above — reproduces this section's numbers).
+
+Reproduce the analysis: `python PRISM/multipref/analyze_matrix.py --matrix results/multipref/lorev2_matrix_lamd10.pt`
