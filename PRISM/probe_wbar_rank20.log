@@ -1,0 +1,107 @@
+230238 distinct (prompt, response) items scored
+
+=== surface correlates (Pearson r with the response score) ===
+a direction that is mostly length/formatting shows up here
+
+feature        |     wbar | base_head
+--------------------------------------
+chars          |   +0.690 |    +0.496
+words          |   +0.721 |    +0.522
+newlines       |   +0.658 |    +0.487
+list_markers   |   +0.563 |    +0.428
+markdown_bold  |   +0.533 |    +0.434
+digits         |   +0.384 |    +0.227
+questions      |   +0.119 |    +0.073
+
+agreement      | Pearson corr(wbar, base_head) scores  = +0.801
+               | Spearman rank corr(wbar, base_head)  = +0.768  (the true 'do they rank responses alike' number -- Pearson above is score correlation, not rank correlation, despite how earlier write-ups described it)
+
+
+==============================================================================
+A. Turns where the learned direction most strongly prefers one response
+==============================================================================
+
+PROMPT: can you expand and turn this into a 5-day course on environmental science with each day having goals, activities, discussion questions, assessment tasks.
+
+  [PREFERRED]  wbar +4.04   head +3.13   (5491 chars)
+    Here is a 5-day course on environmental science for a high school class: **Day 1: Introduction to Environmental Science** * **Goals:** + Define environmental science and its importance + Identify major environmental issues (climate change, pollution, conservation) + Understand the interconnectedness of human and natural systems * **Activities:** 1. Introduction (10 minutes): Introduce the concept of environmental sci...
+
+  [DISPREFERRED]  wbar -4.43   head +3.67   (5534 chars)
+    Here is a 5-day course on environmental science for a high school class: **Day 1: Introduction to Environmental Science** * **Goals:** + Define environmental science and its importance + Identify major environmental issues (pollution, climate change, conservation) + Understand the interconnectedness of human and natural systems * **Activities:** 1. Introduction (10 minutes): Introduce the concept of environmental sci...
+
+------------------------------------------------------------------------------
+
+PROMPT: Draft a syllabus for a sustainable business practices course, including topics, weekly readings, and key assignments. Specify which sustainable business models or case studies will be covered througho
+
+  [PREFERRED]  wbar +2.33   head +18.48   (4020 chars)
+    **Sustainable Business Practices Course Syllabus** ## Course Description: This course explores the principles and practices of sustainable business, focusing on environmental stewardship, social responsibility, and economic viability. Students will learn how to develop and implement sustainable business strategies, assess organizational sustainability performance, and communicate sustainability initiatives to stakeho...
+
+  [DISPREFERRED]  wbar -5.18   head -30.50   (1066 chars)
+    Key components include modules dedicated to carbon footprint reduction strategies employed by technology giants like Amazon, renewable energy integration by Total SA, and strategic partnerships formed by Novartis to address healthcare access disparities worldwide. To complement these analyses, formative evaluations are embedded throughout the semester, offering continuous feedback loops that support individualized sk...
+
+------------------------------------------------------------------------------
+
+PROMPT: Can you finish the play by having a giant bigfoot jump out from behind a tree, scaring the family. But, then have it be friendly and introduce itself?
+
+  [PREFERRED]  wbar +2.27   head +5.84   (3769 chars)
+    "The Gathering" Characters: - JEN, mother - MIKE, father - EMILY, daughter - JACK, son - SARAH, aunt - TOM, grandfather - BIGFOOT, a giant, furry creature Setting: A picnic area in a national park (The family sits at a picnic table, surrounded by trees and a lake in the background.) JEN: It's great to finally be together again. MIKE: Definitely. It's been too long. EMILY: I love it here. The scenery is beautiful. JAC...
+
+  [DISPREFERRED]  wbar -5.04   head -28.53   (680 chars)
+    The family reunion at the national park is a celebration of diversity and individuality. Each family member brings their unique perspective and experiences, weaving a rich tapestry of cultures and traditions. They come from different parts of the country, with different accents and customs, but they are united by their shared history and love for one another. As they gather around the picnic tables, they share food a...
+
+------------------------------------------------------------------------------
+
+PROMPT: Can you help me design a full syllabus outline for a semester-long course on sustainable business practices, combining the practical strategy focus from Response B and the foundational skills from Res
+
+  [PREFERRED]  wbar +1.97   head +14.15   (4458 chars)
+    To integrate the practical strategy focus from Response B and the foundational skills from Response A into a full syllabus outline for a semester-long course on sustainable business practices, consider the following structure: **Course Title:** Sustainable Business Practices **Credits:** 3 **Duration:** Semester-long (14 weeks) **Course Description:** This course explores the principles and practices of sustainable b...
+
+  [DISPREFERRED]  wbar -5.29   head -31.35   (875 chars)
+    The pursuit of sustainability in business is deeply rooted in ethical considerations, requiring a fundamental shift in how companies approach their operations and interactions with stakeholders. This course will delve into the moral and ethical dimensions of sustainable business practices, examining the implications of business decisions on the environment, employees, customers, and the broader community. Course goal...
+
+------------------------------------------------------------------------------
+
+
+==============================================================================
+B. Turns where the two directions disagree most (the learned direction's pick is the pretrained head's least favourite)
+==============================================================================
+
+PROMPT: How can I find the root cause, she will not talk to me about why she is lying.
+
+  [PREFERRED]  wbar -2.96   head -23.88   (627 chars)
+    Since your daughter won't discuss the issue directly, focus on building trust and creating a safe space for conversation. Start by having casual, non-confrontational talks about everyday topics, showing genuine interest in her thoughts and feelings. Avoid being judgmental or accusatory, as this could further close her off. Engage in activities together that promote bonding, like hobbies or games, which can help stren...
+
+  [DISPREFERRED]  wbar -4.36   head -22.37   (567 chars)
+    It might be helpful to explore potential underlying emotional or psychological factors contributing to her lying. Consider consulting a child psychologist or therapist who can work with your daughter to identify root causes and develop strategies for addressing them. A professional can provide guidance on how to communicate effectively with your daughter, helping you navigate the situation without inadvertently exace...
+
+------------------------------------------------------------------------------
+
+PROMPT: suggest based on the cost the clothing
+
+  [PREFERRED]  wbar -3.38   head -17.34   (389 chars)
+    Mid-range concert attire can offer both style and comfort without breaking the bank. Invest in a quality pair of dark-washed jeans for $40-$60 and a graphic t-shirt for $15-$30. A leather jacket can range from $50-$80, while a pair of sturdy boots can cost $60-$90. Add a statement accessory like a bold scarf for $10-$20 or a patterned bandana for $5-$10. Total estimated cost: $175-$280.
+
+  [DISPREFERRED]  wbar -4.01   head -14.94   (331 chars)
+    For an ultra-budget-friendly option, scour second-hand stores or online marketplaces for steals on gently-used clothing. A pair of jeans can cost $5-$10, a band tee $3-$5, and a denim jacket $10-$15. Add a pair of sneakers for $10-$20 and accessorize with a thrifted hat for $2-$3 or a DIY accessory. Total estimated cost: $30-$53.
+
+------------------------------------------------------------------------------
+
+PROMPT: On Diwali, Hindus ask Lakshmi for money, but isn't the whole story that Ravana is ego and materialism, so asking Lakshmi for money is like asking her for Ravana? The man who stole her. The darkness of
+
+  [PREFERRED]  wbar -4.69   head -15.99   (479 chars)
+    It's a paradox that indeed reflects the complex nature of human desires and the balance we strive to achieve within ourselves. By asking Lakshmi for money, individuals are acknowledging their earthly needs while simultaneously risking succumbing to the very materialistic tendencies Ravana embodies. This duality highlights the ongoing internal conflict between spiritual aspirations and worldly necessities, making Diwa...
+
+  [DISPREFERRED]  wbar -5.09   head -13.25   (459 chars)
+    The celebration of Diwali is multifaceted, and the request for wealth from Lakshmi isn't about embracing ego or materialism but rather about recognizing the value of prosperity in a balanced life. It's a prayer for well-being, not just monetary riches, but also spiritual wealth and inner peace. The story of Ravana serves as a cautionary tale about the dangers of unbridled ambition and greed, distinguishing between ri...
+
+------------------------------------------------------------------------------
+
+PROMPT: I want to get Mark a little gift to celebrate his recent promotion. I plan to give it to him when we meet up for coffee. Do you have any ideas?
+
+  [PREFERRED]  wbar -3.95   head -20.69   (385 chars)
+    Considering Mark's interests and hobbies might lead to the perfect gift. If he enjoys reading, a new book by his favorite author or one related to his field could be inspiring. For someone who values experiences, tickets to a sporting event or a concert could create lasting memories. A gourmet food basket or a wine and cheese set are also excellent choices for a celebratory gesture.
+
+  [DISPREFERRED]  wbar -4.89   head -17.58   (401 chars)
+    To make the gift even more special, it could be something that acknowledges Mark's achievements and growth within the company. A customized plaque or a commemorative award would serve as a constant reminder of his hard work and dedication. Additionally, an experience-based gift like a weekend getaway or a fun activity he's always wanted to try could provide a unique way to celebrate this milestone.
+
+------------------------------------------------------------------------------

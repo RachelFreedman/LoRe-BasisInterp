@@ -1,0 +1,25 @@
+11 concepts | null threshold |cos| = 0.0318 (95th pct vs random)
+
+seed 0: cos(wbar, base_head) = +0.0295
+seed 1: cos(wbar, base_head) = +0.0223
+seed 2: cos(wbar, base_head) = +0.0287
+seed 3: cos(wbar, base_head) = +0.0222
+seed 4: cos(wbar, base_head) = +0.0359
+
+cosine with concept vectors, mean over 5 seeds (* = |cos| exceeds the 0.032 null)
+
+concept        |             wbar |  base_head |         residual
+--------------------------------------------------------------------
+confidence     | +0.0766* +/- 0.0047 | +0.2523* | +0.0696* +/- 0.0054
+helpfulness    | +0.0648* +/- 0.0017 | +0.4935* | +0.0511* +/- 0.0025
+fluency        | +0.0616* +/- 0.0025 | -0.0416* | +0.0628* +/- 0.0024
+diversity      | +0.0595* +/- 0.0021 | +0.4083* | +0.0482* +/- 0.0039
+formatting     | +0.0530* +/- 0.0030 | +0.3621* | +0.0430* +/- 0.0038
+repetition     | -0.0411* +/- 0.0012 | -0.3939* | -0.0302  +/- 0.0026
+factuality     | +0.0353* +/- 0.0018 | +0.4574* | +0.0226  +/- 0.0037
+sycophancy     | -0.0315  +/- 0.0020 | -0.4007* | -0.0204  +/- 0.0034
+safety         | +0.0297  +/- 0.0024 | +0.4235* | +0.0180  +/- 0.0028
+values         | +0.0295  +/- 0.0021 | +0.4444* | +0.0172  +/- 0.0029
+creativity     | -0.0219  +/- 0.0022 | -0.3831* | -0.0113  +/- 0.0029
+
+Saved ../results/community_alignment/wbar_concepts_941_10000.csv

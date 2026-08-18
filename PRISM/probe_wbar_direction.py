@@ -30,6 +30,7 @@ from collections import defaultdict
 
 import numpy as np
 import torch
+from scipy.stats import spearmanr
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
@@ -80,7 +81,7 @@ def main():
                num_iterations=args.iters, learning_rate=args.lr, verbose=False)
     m.train([users[u][0] for u in uids], val=[users[u][1] for u in uids])
     head = unit(load_reward_head().reshape(-1).float())
-    wbar = unit((m.V.detach() @ m.wbar.detach()).float())
+    wbar = unit((m.V.detach() @ m.wbar.detach()).float()).cpu()
     if float(wbar @ head) < 0:
         wbar = -wbar
 
@@ -109,8 +110,12 @@ def main():
         if v.std() < 1e-9:
             continue
         print(f"{n:<14} | {np.corrcoef(v, s_w)[0,1]:>+8.3f} | {np.corrcoef(v, s_h)[0,1]:>+9.3f}")
-    print(f"\n{'agreement':<14} | corr(wbar, base_head) over responses = "
-          f"{np.corrcoef(s_w, s_h)[0,1]:+.3f}")
+    pearson_r = np.corrcoef(s_w, s_h)[0, 1]
+    spearman_r = spearmanr(s_w, s_h).correlation
+    print(f"\n{'agreement':<14} | Pearson corr(wbar, base_head) scores  = {pearson_r:+.3f}")
+    print(f"{'':<14} | Spearman rank corr(wbar, base_head)  = {spearman_r:+.3f}  "
+          f"(the true 'do they rank responses alike' number -- Pearson above is score "
+          f"correlation, not rank correlation, despite how earlier write-ups described it)")
 
     # ---- 2. within-prompt extremes ----
     by_turn = defaultdict(list)
