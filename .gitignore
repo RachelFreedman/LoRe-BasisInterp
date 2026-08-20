@@ -4,3 +4,4 @@ __pycache__/
 test_activations.py
 PRISM/data/
 PRISM/*.OLD-prefix.pt
+results/planted/*.pt
