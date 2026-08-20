@@ -64,6 +64,9 @@ HIGH or LOW of that concept? Reply with JSON only, no other text:
 {{"concept": "<one name from the library>", "sign": "high" or "low"}}"""
 
 
+FAILURES = []
+
+
 def sign_test(a, b):
     w = sum(x > y for x, y in zip(a, b)); l = sum(x < y for x, y in zip(a, b))
     n = w + l
@@ -88,6 +91,7 @@ def ask(client, model, prompt, retries=3):
         except Exception as e:
             if attempt == retries - 1:
                 print(f"      judge failed: {type(e).__name__} {str(e)[:100]}")
+                FAILURES.append(1)
                 return None, None, None
     return None, None, None
 
@@ -219,7 +223,7 @@ def main():
 
     W, L, T, p = sign_test(sae_acc, base_acc)
     per = {}
-    for r in out_rows:
+    for r in (x for x in out_rows if x.get("condition") == "route"):
         d = per.setdefault(r["true_concept"], [0, 0, 0])
         d[0] += r["sae_correct"]; d[1] += r["nosae_correct"]; d[2] += 1
     fields = sorted({k for r in out_rows for k in r})
@@ -232,7 +236,8 @@ def main():
                "sae_per_seed": sae_acc, "nosae_per_seed": base_acc,
                "sign_test": {"wins": W, "losses": L, "ties": T, "p": p},
                "per_concept": {k: {"sae": v[0], "nosae": v[1], "n": v[2]} for k, v in per.items()},
-               "tokens": {"input": tok_in, "output": tok_out}}, open(a.out, "w"), indent=2)
+               "tokens": {"input": tok_in, "output": tok_out},
+               "judge_call_failures": len(FAILURES)}, open(a.out, "w"), indent=2)
 
     print(f"\n=== LLM judge ({a.model}), {len(sae_acc)} seeds ===")
     print(f"  chance  {1/(2*len(CONCEPT_LIBRARY)):.3f}")
@@ -243,7 +248,7 @@ def main():
     print(f"  sign test: {W}W-{L}L-{T}T   p = {p:.3f}")
     print("\n  per concept (SAE / no-SAE of n):")
     for c, v in per.items(): print(f"    {c:<12} {v[0]:>3} / {v[1]:>3}  of {v[2]}")
-    print(f"\n  tokens: {tok_in} in, {tok_out} out")
+    print(f"\n  tokens: {tok_in} in, {tok_out} out | failed judge calls: {len(FAILURES)}")
 
 
 if __name__ == "__main__":
