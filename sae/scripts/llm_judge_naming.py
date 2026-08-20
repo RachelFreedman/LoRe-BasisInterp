@@ -16,6 +16,15 @@ Pre-registered before running:
               of the counter readout. SAE still below means the deficit is real and
               survives removing the bottleneck.
 
+  Controls, on the SAME evidence budget as the routes (declared before running:
+  16 texts per side, 600 characters each, applied uniformly to all four conditions
+  so nothing is tuned on accuracy):
+    ceiling -- show the judge the REAL contrast pairs for each concept. If it cannot
+               name those, the prompt or the judge is the bottleneck and no route
+               number below means anything. This bounds every other row.
+    null    -- random unit directions through the SAE route. Should sit at chance;
+               if it does not, the selection or the prompt is leaking.
+
 The judge is deliberately NOT a Claude model: the concept contrast sets were written
 by Claude Sonnet 4.5, so a Claude judge naming them would not be independent.
 
@@ -93,8 +102,10 @@ def main():
     ap.add_argument("--split", default="train")
     ap.add_argument("--window", type=int, default=256)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
-    ap.add_argument("--n-texts", type=int, default=8, help="texts per side")
-    ap.add_argument("--chars", type=int, default=500, help="truncation per text")
+    ap.add_argument("--n-texts", type=int, default=16, help="texts per side (all conditions)")
+    ap.add_argument("--chars", type=int, default=600, help="truncation per text (all conditions)")
+    ap.add_argument("--contrast-pairs", default=str(REPO / "data/prism/contrastive_pairs.json"))
+    ap.add_argument("--n-null", type=int, default=12, help="random directions for the null")
     ap.add_argument("--model", default="DeepSeek-V4-Pro")
     ap.add_argument("--batch-size", type=int, default=1024)
     ap.add_argument("--out", default=str(REPO / "results/planted/llm_judge.json"))
@@ -133,8 +144,29 @@ def main():
     Z = sparse.csr_matrix((np.concatenate(vals_), (np.concatenate(rows_), np.concatenate(cols_))),
                           shape=(len(X), dec.shape[1]))
 
-    out_rows, sae_acc, base_acc = [], [], []
     tok_in = tok_out = 0
+    EVAL = payload["concepts"]
+
+    # ---- ceiling: the judge sees the REAL contrast text for each concept ----
+    cpairs = json.load(open(a.contrast_pairs))
+    ceil_hits, ceil_rows = 0, []
+    for c in EVAL:
+        hi = [p["high_response"] for p in cpairs[c]][:a.n_texts]
+        lo = [p["low_response"] for p in cpairs[c]][:a.n_texts]
+        for sgn, (A, B) in (("high", (hi, lo)), ("low", (lo, hi))):
+            prompt = PROMPT.format(library=library,
+                                   set_a=render(A, range(len(A)), a.chars),
+                                   set_b=render(B, range(len(B)), a.chars))
+            pc, ps, u = ask(client, a.model, prompt)
+            if u: tok_in += u.prompt_tokens; tok_out += u.completion_tokens
+            ok = int(pc == c and ps == sgn)
+            ceil_hits += ok
+            ceil_rows.append({"condition": "ceiling", "true_concept": c, "true_sign": sgn,
+                              "pred": pc, "pred_sign": ps, "correct": ok})
+    ceiling = ceil_hits / len(ceil_rows)
+    print(f"   CEILING (real contrast text): {ceiling:.3f}  ({ceil_hits}/{len(ceil_rows)})")
+
+    out_rows, sae_acc, base_acc = list(ceil_rows), [], []
     recs = [r for r in payload["records"] if r["seed"] in a.seeds]
     for rec in recs:
         sh = bh = n = 0
@@ -155,21 +187,46 @@ def main():
                 preds[route] = (c if c in valid else None, s)
             sok = int(preds["sae"] == (tc, ts)); bok = int(preds["nosae"] == (tc, ts))
             sh += sok; bh += bok; n += 1
-            out_rows.append({"seed": rec["seed"], "true_concept": tc, "true_sign": ts,
+            out_rows.append({"condition": "route", "seed": rec["seed"],
+                             "true_concept": tc, "true_sign": ts,
                              "sae_pred": preds["sae"][0], "sae_sign": preds["sae"][1],
                              "nosae_pred": preds["nosae"][0], "nosae_sign": preds["nosae"][1],
                              "sae_correct": sok, "nosae_correct": bok})
         sae_acc.append(sh / n); base_acc.append(bh / n)
         print(f"   seed {rec['seed']}: SAE {sae_acc[-1]:.3f}   no-SAE {base_acc[-1]:.3f}")
 
+    # ---- null: random unit directions through the SAE route ----
+    rng = np.random.default_rng(0)
+    truth = [(c, s_) for c in EVAL for s_ in ("high", "low")]
+    null_hits = 0
+    for i in range(a.n_null):
+        v = torch.tensor(rng.normal(size=dec.shape[0]), dtype=torch.float32)
+        v = F.normalize(v, dim=0)
+        align = (dec.T @ v).numpy()
+        top = np.argsort(np.abs(align) * activity)[::-1][:a.window]
+        w = np.asarray(Z[:, top] @ align[top]).ravel()
+        order = np.argsort(w)
+        prompt = PROMPT.format(library=library,
+                               set_a=render(texts, order[::-1][:a.n_texts], a.chars),
+                               set_b=render(texts, order[:a.n_texts], a.chars))
+        pc, ps, u = ask(client, a.model, prompt)
+        if u: tok_in += u.prompt_tokens; tok_out += u.completion_tokens
+        null_hits += sum(int(pc == tc and ps == ts) for tc, ts in truth) / len(truth)
+        out_rows.append({"condition": "null", "true_concept": "-", "true_sign": "-",
+                         "pred": pc, "pred_sign": ps, "correct": ""})
+    null_acc = null_hits / a.n_null
+    print(f"   NULL (random directions): {null_acc:.3f}")
+
     W, L, T, p = sign_test(sae_acc, base_acc)
     per = {}
     for r in out_rows:
         d = per.setdefault(r["true_concept"], [0, 0, 0])
         d[0] += r["sae_correct"]; d[1] += r["nosae_correct"]; d[2] += 1
+    fields = sorted({k for r in out_rows for k in r})
     with open(a.rows, "w", newline="") as f:
-        wr = csv.DictWriter(f, fieldnames=list(out_rows[0].keys())); wr.writeheader(); wr.writerows(out_rows)
-    json.dump({"judge": a.model, "window": a.window, "n_texts_per_side": a.n_texts,
+        wr = csv.DictWriter(f, fieldnames=fields, restval=""); wr.writeheader(); wr.writerows(out_rows)
+    json.dump({"judge": a.model, "ceiling": ceiling, "null": null_acc,
+               "window": a.window, "n_texts_per_side": a.n_texts,
                "chars": a.chars, "seeds": a.seeds, "chance": 1 / (2 * len(CONCEPT_LIBRARY)),
                "sae_mean": float(np.mean(sae_acc)), "nosae_mean": float(np.mean(base_acc)),
                "sae_per_seed": sae_acc, "nosae_per_seed": base_acc,
@@ -179,6 +236,8 @@ def main():
 
     print(f"\n=== LLM judge ({a.model}), {len(sae_acc)} seeds ===")
     print(f"  chance  {1/(2*len(CONCEPT_LIBRARY)):.3f}")
+    print(f"  null    {null_acc:.3f}   (random directions)")
+    print(f"  CEILING {ceiling:.3f}   (real contrast text -- bounds everything below)")
     print(f"  SAE     {np.mean(sae_acc):.3f} +/- {np.std(sae_acc):.3f}")
     print(f"  no-SAE  {np.mean(base_acc):.3f} +/- {np.std(base_acc):.3f}")
     print(f"  sign test: {W}W-{L}L-{T}T   p = {p:.3f}")
