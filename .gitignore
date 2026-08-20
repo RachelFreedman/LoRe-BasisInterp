@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .DS_Store
 test_activations.py
+PRISM/data/
+PRISM/*.OLD-prefix.pt

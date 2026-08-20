@@ -14,8 +14,8 @@
   ],
   "dict_size": 16384,
   "max_concept_pair_cos": 0.9351641535758972,
-  "n_texts": 20760,
-  "profiled_features": 3381,
+  "n_texts": 31548,
+  "profiled_features": 3642,
   "proxy_names": [
     "markdown",
     "length",

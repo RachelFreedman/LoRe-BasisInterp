@@ -14,7 +14,7 @@
   "planted_accuracy_mean": 0.7777777777777778,
   "planted_accuracy_std": 0.07856742013183865,
   "planted_concept_accuracy_mean": 0.7777777777777778,
-  "reconstruction_error_contrast_set": 17.350566864013672,
+  "reconstruction_error_contrast_set": 16.596698760986328,
   "reconstruction_error_prism_test_reference": 11.98,
   "sae_k": 256,
   "top_k_readout": 256
