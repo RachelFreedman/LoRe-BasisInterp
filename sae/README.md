@@ -67,25 +67,51 @@ Full config: `sae/configs/d3.yaml`.
 
 ## Expected D3 result
 
+Retrained on the corrected PRISM embeddings (see **Data version** below).
+
 | Metric | Expected |
 | --- | ---: |
-| Mean LoRe basis Pearson | 0.9542 |
-| Minimum LoRe basis Pearson | 0.9538 |
-| Mean pair-score Pearson | 0.9152 |
-| Explained variance | 0.9924 |
-| Reconstruction MSE | 0.0384 |
-| Original LoRe accuracy | 0.9301 |
-| Reconstructed LoRe accuracy | 0.9387 |
-| Accuracy drop | -0.0086 |
-| Test live features | 10668 / 16384 |
-| Test dead-feature rate | 0.3489 |
-| Test live-feature Gini | 0.9096 |
-| Top 5% activation mass | 0.8557 |
-| Effective feature count | approximately 666 |
+| Mean LoRe basis Pearson | 0.9994 |
+| Minimum LoRe basis Pearson | 0.9994 |
+| Mean pair-score Pearson | 0.9994 |
+| Explained variance | 0.9941 |
+| Reconstruction MSE | 0.0299 |
+| Original LoRe accuracy | 0.5966 |
+| Reconstructed LoRe accuracy | 0.6014 |
+| Accuracy drop | -0.0048 |
+| Test live features | 11148 / 16384 |
+| Test dead-feature rate | 0.3196 |
+| Test live-feature Gini | 0.9190 |
+| Top 5% activation mass | 0.8646 |
+| Effective feature count | approximately 611 |
 
-Small floating-point differences across devices are acceptable. The committed reference row is in `sae/d3_results.csv`.
+Small floating-point differences across devices are acceptable. The committed reference
+row is in `sae/d3_results.csv`.
 
-**D3 passes the predefined LoRe-preservation gate.**
+**D3 passes the LoRe-preservation gate, but the gate no longer discriminates.** Basis
+Pearson of 0.9994 reads like an improvement on the previous 0.9542 and is not one. The
+Phase-1 bases refit on corrected embeddings predict held-out preference at 0.5904 and
+carry a twelfth of their former norm, so `V^T e` is dominated by the shared component of
+the embedding cloud and the correlation is close to free. Do not cite these three numbers
+as evidence of reconstruction quality; use explained variance and the pair-score
+correlation instead, and read the gate as a floor rather than a discriminator.
+
+## Data version
+
+These numbers come from the corrected PRISM embeddings. The earlier regeneration fixed a
+bug where rejected responses were rendered as a Python list rather than prose, so every
+rejected embedding changed while chosen ones stayed identical. Corrected files carry
+`pair_format: string-vs-string-v1` in `extra_info` and hold 19,638 train / 19,727 test
+comparisons; the pre-fix files hold 12,999 and lack the marker.
+
+The SAE trains on chosen and rejected embeddings pooled, not on their differences, so
+half of the previous training set was affected. Both the SAE and the Phase-1 basis were
+refit. The previous reference row is preserved in git history at `57dbef7` and does not
+reproduce on corrected data.
+
+The retrained checkpoint is `D3_16384_k256_string-vs-string-v1.pt` on the team Drive.
+Feature indices do not correspond between it and the previous dictionary, so results from
+the two cannot be compared feature-by-feature.
 
 ## Artifacts to look at
 
