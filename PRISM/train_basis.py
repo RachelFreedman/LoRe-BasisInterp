@@ -62,24 +62,13 @@ print(N)
 print(N_unseen)
 
 
-from transformers import AutoModel
-
-model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
-rm = AutoModel.from_pretrained(
-    model_name,
-    torch_dtype=torch.bfloat16,
-    device_map=device,
-    attn_implementation="eager",
-    num_labels=1,
-)
-
-# Initialize a variable to store the last linear layer
-last_linear_layer = None
-# Iterate over the model's modules
-for name, module in rm.named_modules():
-    if isinstance(module, torch.nn.Linear):
-        last_linear_layer = module
-V_final = last_linear_layer.weight[:,0].to(device).to(torch.float32).reshape(-1, 1)
+# FIXED anchor extraction. The old code used AutoModel + "last nn.Linear", which for a
+# LlamaForSequenceClassification checkpoint returns the bare backbone (score.weight is dropped)
+# and grabs layers.31.mlp.down_proj -- an arbitrary MLP column, NOT the reward direction.
+# load_reward_head() returns the TRUE Skywork reward head score.weight (shape [4096, 1]).
+sys.path.append(SCRIPT_DIR)
+from rm_head_utils import load_reward_head
+V_final = load_reward_head(device=device)
 
 # filename = f"./PRISM/V_ref.pt"
 # torch.save(V_final, filename)

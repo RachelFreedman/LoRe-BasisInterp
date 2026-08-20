@@ -100,6 +100,7 @@ import os
 import sys
 import csv
 import argparse
+import random
 import numpy as np
 import torch
 from collections import defaultdict
@@ -109,7 +110,14 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # Make utils.py importable (same trick train_basis.py uses)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils import LoRe_regularized, set_seed  # noqa: E402
+from utils import LoRe_regularized  # noqa: E402
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def group_embeddings_by_user(dataset, seen_value, split_name):
@@ -127,22 +135,15 @@ def group_embeddings_by_user(dataset, seen_value, split_name):
 
 
 def get_reference_direction():
-    """The single global reward direction = backbone's final linear-layer weight.
-    Used as the regularization anchor (V_sft). Loads the 8B backbone once."""
-    from transformers import AutoModel
-    model_name = "Skywork/Skywork-Reward-Llama-3.1-8B-v0.2"
-    rm = AutoModel.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-        device_map=device,
-        attn_implementation="eager",
-        num_labels=1,
-    )
-    last = None
-    for _, m in rm.named_modules():
-        if isinstance(m, torch.nn.Linear):
-            last = m
-    return last.weight[:, 0].to(device).to(torch.float32).reshape(-1, 1)
+    """The single global reward direction = Skywork's TRUE reward head score.weight.
+
+    FIXED: the old code used AutoModel + "last nn.Linear", which returns the bare backbone
+    (score.weight dropped) and grabs layers.31.mlp.down_proj -- an arbitrary MLP column, NOT the
+    reward direction. rm_head_utils.load_reward_head() returns the real score.weight [4096, 1]
+    (via AutoModelForSequenceClassification, or a lightweight ranged fetch)."""
+    sys.path.append(SCRIPT_DIR)
+    from rm_head_utils import load_reward_head
+    return load_reward_head(device=device)
 
 
 def accuracy(W, V, features):
