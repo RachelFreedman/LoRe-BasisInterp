@@ -1,0 +1,21 @@
+{
+  "chance": 0.045454545454545456,
+  "n_groups": 22,
+  "nosae_accuracy_mean": 0.4166666666666667,
+  "nosae_per_seed": [
+    0.5,
+    0.4166666666666667,
+    0.3333333333333333
+  ],
+  "note": "Feature meanings derived from PRISM text only; concept signatures from contrast text only. No concept vectors or embeddings in the scoring path.",
+  "null_nosae": 0.06625,
+  "null_sae": 0.060833333333333336,
+  "profiled_features": 3381,
+  "sae_accuracy_mean": 0.38888888888888884,
+  "sae_per_seed": [
+    0.3333333333333333,
+    0.5,
+    0.3333333333333333
+  ],
+  "top_k": 256
+}

@@ -1,0 +1,284 @@
+% Planted-direction check -- Owner: Hassan, Red-teamer: Harsh
+% Requires: \usepackage{booktabs}
+% STATUS: provisional. Numbers are from 3 seeds. Circularity controls ARE run
+% (disjoint-split + answer-absent); the literal out-of-library axis, which needs
+% response generation + a GPU embedding pass, is not.
+% Open items are marked [PROVISIONAL] in the text so they are easy to find.
+
+\section{Planted-Direction Check}
+\label{sec:planted}
+
+The other analyses in this paper ask what the learned reward directions mean.
+On real preference data there is no answer key, so a confident wrong label and a
+correct one look the same. This section builds a case where the answer is known
+in advance: we plant a concept, let the pipeline recover it, and check whether
+the recovered direction can be named correctly.
+
+The chain under test has four links: users who disagree along a known axis, an
+mLoRe fit, a recovered reward direction, and an SAE readout that assigns a name.
+A failure anywhere in that chain shows up as a wrong name, so the experiment is
+designed to localise where it fails.
+
+\subsection{Setup}
+
+We construct synthetic users who disagree along six concept axes (\emph{fluency,
+repetition, confidence, creativity, formatting, diversity}). For each axis, half
+the users prefer high values of the concept and half prefer low, giving twelve
+$(\text{concept},\text{sign})$ groups of twenty users each. Every user sees a
+random $70\%$ subset of their group's preference pairs, so a single user's
+direction carries subset noise on top of the concept; the group is therefore the
+unit on which ground truth is defined, and we take one mean direction per group.
+Each of the twelve directions now carries a label we know to be correct.
+
+Preferences are expressed over real Skywork response embeddings, so the planted
+signal is the only thing that is synthetic. The SAE is the frozen \texttt{D3}
+checkpoint (dictionary size $16384$, $k=256$), trained on $41{,}730$ PRISM
+response embeddings and never exposed to the planted axes.
+
+We score the readout as forced choice: given a direction, the SAE must select
+the correct $(\text{concept},\text{sign})$ pair from all candidates. Presence of
+the right concept somewhere in the top features is not used, because the concept
+library is internally correlated up to $|\cos| = 0.68$ and a permissive metric
+would reward near-misses.
+
+\subsection{Two controls}
+
+\textbf{Null.} The same readout applied to random unit directions. This should
+land at chance; if it does not, the scoring path is leaking information about
+the answer rather than reading it off the direction.
+
+\textbf{Ceiling.} The same readout applied to the \emph{true} concept vector
+instead of the recovered one. This control is load-bearing here, because
+training recovers which users are alike far better than it recovers what the
+axes are: group-direction match is $0.989$, while subspace alignment is $0.755$
+and best-axis match is $0.674$ (random floors $0.050$ and $0.030$). A recovered
+direction is thus only a partial reconstruction of the concept it was planted
+from. Without the ceiling, a weak readout could not be attributed to the SAE
+rather than to the fit.
+
+\subsection{Stage 1: can the SAE identify the planted concept?}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+Direction supplied to the readout & Accuracy \\
+\midrule
+Recovered (planted concept)       & $0.778 \pm 0.079$ \\
+True concept vector (ceiling)     & $0.667$ \\
+Random unit directions (null)     & $0.083$ \\
+\midrule
+Chance ($1/12$)                   & $0.083$ \\
+\bottomrule
+\end{tabular}
+\caption{Forced-choice identification over twelve $(\text{concept},\text{sign})$
+groups. Mean over three seeds; per-seed accuracies $0.667$, $0.833$, $0.833$.}
+\label{tab:planted-readout}
+\end{table}
+
+The readout identifies the planted concept at roughly nine times chance, and the
+null sits exactly at chance, confirming the scoring path is not leaking. The
+concept survives the full chain and the SAE can find it.
+
+The ceiling falls slightly below the recovered condition. With twelve items per
+seed the difference is one to two items and is within sampling noise; we do not
+read it as the recovered direction being more informative than the vector it was
+planted from. \emph{[PROVISIONAL: three seeds. To be re-run at ten seeds so this
+comparison carries an interval rather than a verbal caveat.]}
+
+\subsection{Stage 2: can the SAE name the concept from text?}
+
+Stage 1 scores a direction against concept vectors, which are themselves
+geometric objects. The task the method actually needs is harder: produce a name
+from text. In Stage 2 the scoring path contains no concept vectors and no
+embeddings. Feature meanings are derived from PRISM text alone, concept
+signatures from contrast text alone, and the two are matched. We compare this
+against a baseline that performs the same text matching \emph{without} routing
+through SAE features.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+Naming route & Accuracy \\
+\midrule
+Via SAE features       & $0.389$ \\
+Without the SAE        & $0.417$ \\
+\midrule
+Null (SAE / no-SAE)    & $0.061$ / $0.066$ \\
+Chance ($1/22$)        & $0.045$ \\
+\bottomrule
+\end{tabular}
+\caption{Naming from text over twenty-two $(\text{concept},\text{sign})$ groups,
+mean over three seeds. Per-seed: SAE $0.333, 0.500, 0.333$; no-SAE $0.500,
+0.417, 0.333$.}
+\label{tab:planted-naming}
+\end{table}
+
+Both routes beat chance by roughly eight times, so the planted concept is
+recoverable from text. But the SAE route confers no measurable advantage over
+the route that skips it. The two are also not independent: across the $36$
+scored items they return the same $(\text{concept},\text{sign})$ prediction
+$78\%$ of the time, and the discordant cells are small enough that the
+comparison has almost no power to separate them --- one item correct under the
+SAE route only, two under the baseline only, $13$ under both, $20$ under
+neither. The defensible claim is therefore that routing through SAE features
+gives \emph{no detectable advantage} over a simpler text baseline on this task,
+not that it is worse.
+
+\subsection{Is the concept library doing the work?}
+\label{sec:planted-circularity}
+
+In both stages the planted direction and the scoring map are built from the same
+fifty contrast pairs per concept, so a hit could be self-matching rather than
+concept reading. Two separable questions live inside that concern, and we test
+each. A genuinely novel concept cannot be constructed from existing data --- it
+requires generating new responses and embedding them --- so the second test
+makes the planted concept \emph{unavailable} to the readout instead.
+
+\paragraph{Disjoint text.} We split each concept's pairs into two halves, plant
+users from half A only, and build the SAE concept profiles from half B only:
+same concepts, no shared items. Half-A concept vectors agree with the full-set
+vectors at $\cos = 0.992$, and user grouping is recovered perfectly
+(group-direction match $1.000$), so the halves are individually adequate.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lr}
+\toprule
+Planting set / scoring set & Accuracy \\
+\midrule
+Half A / half A (shared items)   & $0.694$ \\
+Half A / half B (disjoint items) & $0.722$ \\
+\midrule
+Chance ($1/12$)                  & $0.083$ \\
+\bottomrule
+\end{tabular}
+\caption{Identification accuracy with shared versus disjoint contrast items,
+three seeds, twenty-five pairs per concept per half. Per-seed: shared $0.500,
+0.833, 0.750$; disjoint $0.583, 0.750, 0.833$.}
+\label{tab:planted-disjoint}
+\end{table}
+
+Accuracy does not depend on the planting and scoring sets sharing items --- the
+disjoint condition is marginally higher, well within seed noise. Both sit below
+the headline $0.778$ of Table~\ref{tab:planted-readout} because each half
+carries half the data. The identification result in Stage~1 is therefore not
+item memorisation.
+
+\paragraph{Confidence when the answer is absent.} We then remove the planted
+concept's own column from the candidate set, so the readout is forced to name a
+direction whose true concept it does not have. From the readout's point of view
+the planted axis is now outside its library. This is compared against removing a
+\emph{random other} concept, leaving the correct answer available; both
+conditions score over the same number of columns, so the confidence margin is
+not inflated by the smaller denominator.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Condition & Accuracy & Mean margin \\
+\midrule
+A random other concept removed (answer available) & $0.750$ & $0.406$ \\
+The true concept removed (answer unavailable)     & ---     & $0.392$ \\
+\midrule
+\multicolumn{2}{l}{Ratio of margins, absent over present} & $0.966$ \\
+\bottomrule
+\end{tabular}
+\caption{Readout confidence with and without the correct answer in the candidate
+set, three seeds. Margin is the winning concept's share of total absolute
+signature mass.}
+\label{tab:planted-absent}
+\end{table}
+
+The readout is essentially as confident when the correct answer is unavailable
+as when it is present: removing the true concept costs $3.4\%$ of the margin.
+It does not decline to answer, and it does not signal that anything is wrong ---
+it names a different concept with almost undiminished confidence.
+
+This is the more consequential of the two controls. It means the margin carries
+no information about whether a name is correct, and therefore that on real
+directions --- where no answer key exists --- a confident SAE naming is not
+evidence that the naming is right. Any downstream use of this readout needs an
+external check on the label, not the readout's own confidence.
+
+\emph{[PROVISIONAL: the literal pre-registered version --- planting an axis
+generated outside the concept library and embedded through Skywork --- is not
+run here. It requires response generation and a GPU embedding pass, and would
+additionally test whether a novel axis is representable at all. The two controls
+above address item-level circularity and answer-absence calibration, which are
+the parts reachable from existing data.]}
+
+\subsection{What this shows}
+
+The SAE is not blind to preference directions. When a concept is planted and
+scored geometrically, the SAE recovers it far above chance with a null that
+behaves correctly (Table~\ref{tab:planted-readout}). But at the task the method
+depends on --- turning a direction into a name using text --- passing through
+SAE features buys nothing detectable over a simpler baseline
+(Table~\ref{tab:planted-naming}). These are compatible: the information is
+present and reachable, and the SAE decomposition is not what makes it readable.
+
+The controls sharpen rather than soften this. Identification survives disjoint
+text, so the Stage~1 result is real. But the readout is no less confident when
+the correct answer has been removed from its candidate set
+(Table~\ref{tab:planted-absent}), so it cannot flag its own failures. Taken
+together: the SAE can find a planted concept, it adds nothing detectable to
+naming one, and it gives no usable signal about when to believe it.
+
+\subsection{Limitations}
+
+The SAE operates off-distribution on the contrast set. Mean reconstruction error
+there is $17.35$, against $11.98$ on held-out PRISM responses, so Stage~2 asks
+the dictionary to describe inputs less like its training data than the
+benchmark suggests.
+
+Both stages are small. Stage~1 scores twelve items per seed and Stage~2 scores
+twenty-two, over three seeds; intervals are correspondingly wide and the
+SAE-versus-baseline contrast rests on three discordant items.
+
+The answer-absent control removes a concept from the candidate set rather than
+planting a genuinely novel one. A removed concept still correlates with what
+remains in the library, so this is a lower bound on the confidence a truly
+unrepresentable axis would attract, not a measurement of it.
+
+Finally, the synthetic users disagree cleanly and by construction along a single
+axis each. This is deliberate --- the point is an existence proof, and a
+negative result under these conditions is more informative than a negative
+result on noisy data --- but a positive result here is an upper bound on what to
+expect from real preference data, not a prediction for it.
+
+\appendix
+\section{Reproduction details for the planted-direction check}
+\label{app:planted}
+
+Scripts are on branch \texttt{hassan/sae-planted-concept}. Stage~1 is
+\texttt{PRISM/planted\_directions.py}, which builds users via
+\texttt{PRISM/synthetic\_concept\_users.py} and emits one labelled group-mean
+direction per $(\text{concept},\text{sign})$ group. Stage~2a is
+\texttt{sae/scripts/planted\_concept\_readout.py} and Stage~2b is
+\texttt{sae/scripts/planted\_concept\_naming.py}, the latter drawing feature
+meanings from \texttt{sae/scripts/feature\_text\_profiles.py} over $3{,}381$
+profiled features. The circularity controls of
+Section~\ref{sec:planted-circularity} are
+\texttt{sae/scripts/planted\_circularity\_controls.py}. Outputs are written to
+\texttt{results/planted/}.
+
+Two implementation points affect reproducibility.
+
+First, differences are taken in \emph{activation} space: each response is
+encoded separately and the codes subtracted, rather than encoding the difference
+of the embeddings. The SAE encoder computes $\mathrm{enc}(x - b_{\text{pre}})$
+with $b_{\text{pre}}$ the mean training embedding ($\|b_{\text{pre}}\| \approx
+144$), so a difference vector, which is already centred near zero, would be read
+as approximately $-b_{\text{pre}}$ and the top-$k$ selection would describe that
+offset rather than the preference. The same caution applies to encoding any
+unit-norm direction.
+
+Second, all runs are pinned to CPU. \texttt{utils.py} resolves the device at
+import and constructs parameters with \texttt{device=device}, so
+\texttt{manual\_seed} draws a different initialisation stream under CUDA; on one
+run this moved subspace alignment from $0.755$ to $0.795$ and best-axis match
+from $0.674$ to $0.703$ with the data-side quantities unchanged. Figures in this
+section are comparable across machines only when CUDA is disabled.

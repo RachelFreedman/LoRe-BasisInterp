@@ -1,0 +1,39 @@
+{
+  "concepts": [
+    "fluency",
+    "repetition",
+    "confidence",
+    "creativity",
+    "formatting",
+    "diversity"
+  ],
+  "n_groups": 12,
+  "top_k": 256,
+  "chance": 0.08333333333333333,
+  "chance_one_dropped": 0.1,
+  "stored_vs_recomputed_cos": 0.9999293585618337,
+  "halfA_vs_full_cos": 0.9919983843962351,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "split_seed": 7,
+  "control1_same_half_accuracy_mean": 0.6944444444444445,
+  "control1_same_half_per_seed": [
+    0.5,
+    0.8333333333333334,
+    0.75
+  ],
+  "control1_disjoint_accuracy_mean": 0.7222222222222223,
+  "control1_disjoint_per_seed": [
+    0.5833333333333334,
+    0.75,
+    0.8333333333333334
+  ],
+  "control1_group_dir_match_mean": 1.0,
+  "control2_accuracy_answer_present": 0.75,
+  "control2_margin_answer_present": 0.4061146742767758,
+  "control2_margin_answer_absent": 0.39242647671037245,
+  "control2_margin_ratio_absent_over_present": 0.9662947476823393
+}

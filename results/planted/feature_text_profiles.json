@@ -1,0 +1,32 @@
+{
+  "concepts": [
+    "confidence",
+    "creativity",
+    "diversity",
+    "factuality",
+    "fluency",
+    "formatting",
+    "helpfulness",
+    "repetition",
+    "safety",
+    "sycophancy",
+    "values"
+  ],
+  "dict_size": 16384,
+  "max_concept_pair_cos": 0.9351641535758972,
+  "n_texts": 20760,
+  "profiled_features": 3381,
+  "proxy_names": [
+    "markdown",
+    "length",
+    "ttr",
+    "ngram_rep",
+    "hedge",
+    "agree",
+    "refuse",
+    "avg_word_len",
+    "sent_count",
+    "question"
+  ],
+  "top_n_texts_per_feature": 50
+}

@@ -1,0 +1,80 @@
+{
+  "concepts": [
+    "helpfulness",
+    "fluency",
+    "factuality",
+    "safety",
+    "diversity",
+    "creativity",
+    "values",
+    "confidence",
+    "formatting",
+    "sycophancy",
+    "repetition"
+  ],
+  "effective_axes_all": 2.149771213531494,
+  "effective_axes_planted_six": 3.013885974884033,
+  "eigenvalues": [
+    7.315468788146973,
+    1.1614811420440674,
+    0.9272902607917786,
+    0.546161949634552,
+    0.4113263189792633,
+    0.22601129114627838,
+    0.13167066872119904,
+    0.10134860873222351,
+    0.08936550468206406,
+    0.07554503530263901,
+    0.014330089092254639
+  ],
+  "axes_for_90pct_variance": 4,
+  "max_abs_cos_all": 0.9826480150222778,
+  "max_abs_cos_planted_six": 0.6819992661476135,
+  "most_collinear_pairs": [
+    [
+      "safety",
+      "values",
+      0.9826480150222778
+    ],
+    [
+      "values",
+      "sycophancy",
+      -0.9206854104995728
+    ],
+    [
+      "safety",
+      "sycophancy",
+      -0.9013791084289551
+    ],
+    [
+      "factuality",
+      "values",
+      0.8932581543922424
+    ],
+    [
+      "diversity",
+      "values",
+      0.8849871754646301
+    ],
+    [
+      "factuality",
+      "safety",
+      0.8789687156677246
+    ]
+  ],
+  "self_retrieval": {
+    "helpfulness": true,
+    "fluency": true,
+    "factuality": false,
+    "safety": false,
+    "diversity": true,
+    "creativity": false,
+    "values": false,
+    "confidence": true,
+    "formatting": true,
+    "sycophancy": true,
+    "repetition": true
+  },
+  "self_retrieval_n_ok": 7,
+  "self_retrieval_split_seed": 0
+}

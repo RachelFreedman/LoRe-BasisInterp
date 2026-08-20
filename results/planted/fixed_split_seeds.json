@@ -1,0 +1,85 @@
+{
+  "window": 32,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "chance": 0.045454545454545456,
+  "null": 0.06,
+  "sae_mean": 0.35,
+  "sae_std": 0.11055415967851333,
+  "nosae_mean": 0.375,
+  "nosae_std": 0.06718548123582126,
+  "sae_per_seed": [
+    0.3333333333333333,
+    0.3333333333333333,
+    0.5,
+    0.25,
+    0.5,
+    0.5,
+    0.25,
+    0.3333333333333333,
+    0.16666666666666666,
+    0.3333333333333333
+  ],
+  "nosae_per_seed": [
+    0.5,
+    0.3333333333333333,
+    0.5,
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333,
+    0.4166666666666667,
+    0.3333333333333333
+  ],
+  "sign_test": {
+    "wins": 2,
+    "losses": 4,
+    "ties": 4,
+    "p": 0.6875
+  },
+  "per_concept": {
+    "fluency": {
+      "sae": 0,
+      "nosae": 0,
+      "n": 20
+    },
+    "repetition": {
+      "sae": 20,
+      "nosae": 7,
+      "n": 20
+    },
+    "confidence": {
+      "sae": 0,
+      "nosae": 18,
+      "n": 20
+    },
+    "creativity": {
+      "sae": 0,
+      "nosae": 0,
+      "n": 20
+    },
+    "formatting": {
+      "sae": 8,
+      "nosae": 0,
+      "n": 20
+    },
+    "diversity": {
+      "sae": 14,
+      "nosae": 20,
+      "n": 20
+    }
+  },
+  "fixed_split": true,
+  "design": "FIXED pair split of contrast pairs; plant on half A embeddings, fingerprints from half B text; window frozen, not re-tuned"
+}
