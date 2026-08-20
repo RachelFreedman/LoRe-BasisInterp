@@ -80,7 +80,7 @@ def main() -> int:
     ap.add_argument("--profiles", default="results/planted/feature_text_profiles.pt")
     ap.add_argument("--directions", default="results/planted/planted_directions.pt")
     ap.add_argument("--sae-data", default="sae/data")
-    ap.add_argument("--prism-train", default="../phase1_artifacts/train_embeddings.pkl")
+    ap.add_argument("--prism-train", default="PRISM/data/prism/train_embeddings.pkl")
     ap.add_argument("--split", default="train")
     ap.add_argument("--top-k", type=int, default=256)
     ap.add_argument("--n-null", type=int, default=200)

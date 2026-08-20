@@ -167,7 +167,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--checkpoint", default="sae/checkpoints/d3/model.pt")
     ap.add_argument("--sae-data", default="sae/data")
-    ap.add_argument("--prism-train", default="../phase1_artifacts/train_embeddings.pkl")
+    ap.add_argument("--prism-train", default="PRISM/data/prism/train_embeddings.pkl")
     ap.add_argument("--split", default="train")
     ap.add_argument("--embeddings", default="data/prism/contrastive_pair_embeddings.pt")
     ap.add_argument("--top-n", type=int, default=50, help="top-activating texts per feature")

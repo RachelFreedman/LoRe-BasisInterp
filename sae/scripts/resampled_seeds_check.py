@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--checkpoint", default=str(REPO / "sae/checkpoints/d3/model.pt"))
     ap.add_argument("--profiles", default=str(REPO / "results/planted/feature_text_profiles.pt"))
     ap.add_argument("--sae-data", default=str(REPO / "sae/data"))
-    ap.add_argument("--prism-train", default=str(REPO.parent / "phase1_artifacts/train_embeddings.pkl"))
+    ap.add_argument("--prism-train", default=str(REPO / "PRISM/data/prism/train_embeddings.pkl"))
     ap.add_argument("--split", default="train")
     ap.add_argument("--seeds", type=int, nargs="+", default=list(range(10)))
     ap.add_argument("--window", type=int, default=FROZEN_WINDOW)
