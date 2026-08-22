@@ -139,10 +139,24 @@ def pool_styles(concepts, library):
 
 # --------------------------------------------------------------------------- prompts
 
-def load_prompts(n_prompts, seed):
+def load_prompts(n_prompts, seed, existing_file=None):
     """Fixed question set, sampled from Community Alignment if available so the prompts look like
-    the real data. Falls back to PRISM."""
+    the real data. Falls back to PRISM.
+
+    EXTENSION IS NESTED. If a prompts.json already exists, its prompts are kept in their existing
+    order and only the shortfall is drawn fresh. random.sample(pop, 60) is not a superset of
+    random.sample(pop, 30) from the same seed, so re-sampling would silently orphan every response
+    already generated against the old prompt_idx values -- paying twice for the same pool.
+    """
     rng = random.Random(seed)
+    keep = []
+    if existing_file and os.path.exists(existing_file):
+        with open(existing_file) as f:
+            keep = json.load(f)
+        if len(keep) >= n_prompts:
+            print(f"reusing first {n_prompts} of {len(keep)} existing prompts")
+            return keep[:n_prompts]
+        print(f"keeping {len(keep)} existing prompts, drawing {n_prompts - len(keep)} more")
     for path, key in ((f"data/community_alignment/pairs.json", "prompt"),
                       (f"data/prism/pairs.json", "prompt")):
         if os.path.exists(path):
@@ -154,9 +168,12 @@ def load_prompts(n_prompts, seed):
                 if p and p not in seen and 40 < len(p) < 600:
                     seen.add(p)
                     out.append(p)
-            if len(out) >= n_prompts:
-                sel = rng.sample(out, n_prompts)
-                print(f"sampled {n_prompts} prompts from {path}")
+            have = set(keep)
+            fresh = [p for p in out if p not in have]
+            need = n_prompts - len(keep)
+            if len(fresh) >= need:
+                sel = keep + rng.sample(fresh, need)
+                print(f"sampled {need} new prompts from {path} ({len(sel)} total)")
                 return sel
     raise SystemExit("no prompt source found (data/community_alignment/pairs.json or "
                      "data/prism/pairs.json)")
@@ -266,7 +283,7 @@ def _invoke_bedrock(client, model_id, prompt, max_tokens, temperature, max_retri
     return None
 
 
-def generate_pool(styles, prompts, model_id, workers, out_file):
+def generate_pool(styles, prompts, model_id, workers, out_file, max_tokens=4000):
     """One response per (prompt, style). Resumable: existing entries are kept."""
     client = make_client()
     pool = {}
@@ -280,8 +297,8 @@ def generate_pool(styles, prompts, model_id, workers, out_file):
 
     def one(job):
         pi, p, s = job
-        text = invoke(client, model_id,
-                      f"""Answer the user's question below.
+        text = invoke(client, model_id, max_tokens=max_tokens,
+                      prompt=f"""Answer the user's question below.
 
 Write the answer in this style:
 - {s['instruction']}
@@ -374,8 +391,10 @@ def build_pairs(personas, prompts, pool, emb, concepts, cv, pairs_per_user, marg
     # pair, a single global direction explains everything and the dataset tests nothing.
     seen = {}
     for r in out:
-        kp = (r["prompt_idx"], r["chosen"][:80], r["rejected"][:80])
-        rp = (r["prompt_idx"], r["rejected"][:80], r["chosen"][:80])
+        # Keyed on pool keys, not response text: the records no longer carry the text, and keys
+        # identify a response exactly rather than by an 80-character prefix.
+        kp = (r["chosen_key"], r["rejected_key"])
+        rp = (r["rejected_key"], r["chosen_key"])
         if rp in seen:
             seen[rp] = "both"
         else:
@@ -402,6 +421,9 @@ def main():
     ap.add_argument("--pairs_per_user", type=int, default=120)
     ap.add_argument("--margin", type=float, default=0.25)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--max_tokens", type=int, default=4000,
+                    help="raise on a resume pass to fill cells lost to truncation; the "
+                         "verbosity_high pole is the one that hits the cap")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--vectors", default="data/prism/concept_vectors_v2.pt")
     ap.add_argument("--embeddings", default=f"{OUT_DIR}/pool_embeddings.pt")
@@ -443,17 +465,21 @@ def main():
         print(f"[{provider}] model={model_id}", flush=True)
         with open(PERSONA_FILE) as f:
             blob = json.load(f)
-        prompts = load_prompts(args.n_prompts, args.seed)
-        with open(f"{OUT_DIR}/prompts.json", "w") as f:
-            json.dump(prompts, f, indent=2)
+        prompts = load_prompts(args.n_prompts, args.seed, f"{OUT_DIR}/prompts.json")
         styles = pool_styles(blob["concepts"], CONCEPT_LIBRARY_V2)
         n = len(prompts) * len(styles)
         print(f"{len(prompts)} prompts x {len(styles)} styles = {n} responses "
               f"(independent of the {len(blob['personas'])} personas)")
         if args.dry_run:
-            print("dry run, no API calls")
+            print("dry run, no API calls, nothing written")
             return
-        generate_pool(styles, prompts, model_id, args.workers, POOL_FILE)
+        # Written only once we are actually committing to generate against these prompts:
+        # prompt_idx is the key the response pool is stored under, so a prompts.json that
+        # disagrees with the pool silently invalidates it.
+        with open(f"{OUT_DIR}/prompts.json", "w") as f:
+            json.dump(prompts, f, indent=2)
+        generate_pool(styles, prompts, model_id, args.workers, POOL_FILE,
+                      max_tokens=args.max_tokens)
 
     else:
         with open(PERSONA_FILE) as f:

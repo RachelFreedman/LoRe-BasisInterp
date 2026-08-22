@@ -1,7 +1,13 @@
 # Synthetic persona dataset — results
 
-Positive control with known ground truth. 60 personas over 10 concept axes, 30 prompts x 20
-concept-poles = 600 responses, 7,200 preference pairs. Splits are by whole prompt, never by pair.
+Positive control with known ground truth. 60 personas over 10 concept axes, 60 prompts x 20
+concept-poles = 1,200 responses, 14,400 preference pairs. Splits are by whole prompt, never by
+pair.
+
+Correction: an earlier version of this report gave the contested rate as 0.41 (1,304/3,173). That
+count keyed pairs on an 80-character prefix of the response text, which collided across distinct
+responses and undercounted the denominator. Counting on exact pool keys gives 0.38 (1,320/3,455).
+The conclusion is unchanged.
 
 Build and design decisions: `reports/synthetic_dataset_design.md`.
 Runner: `PRISM/synthetic_persona_lore.py`. Raw: `results/synthetic_personas/results.json`.
@@ -10,29 +16,29 @@ Runner: `PRISM/synthetic_persona_lore.py`. Raw: `results/synthetic_personas/resu
 
 | check | value | meaning |
 |---|---|---|
-| contested orderings | **0.41** | for 1,304 of 3,173 distinct response pairs, one user prefers A>B and another B>A |
+| contested orderings | **0.37** | for 2,543 of 6,889 distinct response pairs, one user prefers A>B and another B>A |
 | oracle (planted direction) | **1.0000** | ground truth is exact and analytically recoverable |
-| base_rm | 0.4788 | Skywork's reward head is at chance |
-| global_meandiff | 0.5301 | one shared direction barely beats chance |
-| personal - other_user | **+0.3715** | vs ~0.00 on PRISM and Community Alignment |
+| base_rm | 0.4798 | Skywork's reward head is at chance |
+| global_meandiff | 0.5220 | one shared direction barely beats chance |
+| personal - other_user | **+0.3337** | vs ~0.00 on PRISM and Community Alignment (mean over 4 seeds: +0.400) |
 
 No single global direction can explain these labels. That is the property the real datasets lack
 and the reason a null there was uninformative about the method.
 
 ## Vanilla LoRe vs mLoRe
 
-Held-out prompts, 60 users, median 70 train / 30 test pairs per user.
+Held-out prompts, 60 users, 60 prompts (seed 42; see the seed table below for spread).
 
 | K | vanilla acc | vanilla min abs cos | vanilla user->axis | mLoRe acc | mLoRe min abs cos | mLoRe user->axis |
 |---|---|---|---|---|---|---|
-| 1 | **0.5095** | 1.0000 | 0.017 | **0.8921** | 1.0000 | 0.033 |
-| 4 | 0.9886 | 0.0166 | 0.233 | 0.9930 | 0.1237 | 0.333 |
-| 8 | 0.9919 | 0.0878 | 0.250 | **0.9954** | 0.0065 | **0.533** |
-| 16 | 0.9935 | 0.0002 | 0.300 | 0.9954 | 0.0013 | 0.483 |
+| 1 | **0.4997** | 1.0000 | 0.017 | **0.8929** | 1.0000 | 0.033 |
+| 4 | 0.9944 | 0.0043 | 0.317 | 0.9982 | 0.0928 | 0.400 |
+| 8 | 0.9969 | 0.0306 | 0.317 | **0.9994** | 0.0023 | **0.583** |
+| 16 | 0.9975 | 0.0063 | 0.350 | 0.9988 | 0.0009 | 0.567 |
 
 ### The simplex constraint, isolated
 
-At K=1 vanilla scores **0.5095 — chance** while mLoRe scores **0.8921**.
+At K=1 vanilla scores **0.4997 — exactly chance** while mLoRe scores **0.8929**.
 
 With a single basis vector and simplex-constrained weights, every user's reward is a non-negative
 multiple of the same vector, so all users are forced to agree. Vanilla cannot represent a user who
@@ -46,10 +52,10 @@ with rank held at 1 so nothing else can explain it.
 
 At K >= 4 both methods reach ~0.99. The dataset is near-ceiling by construction, so test accuracy
 cannot separate them above rank 1. The metric that still does is user->axis match, where mLoRe
-leads 0.533 vs 0.250 at K=8.
+leads 0.583 vs 0.317 at K=8 (mean over 4 seeds: 0.550 vs 0.317).
 
 Neither is near 1.0, and that gap is worth stating plainly: recovered directions predict held-out
-preferences at 0.995 while only about half of users' directions are nearest to their own planted
+preferences at 0.999 while only about half of users' directions are nearest to their own planted
 direction. With 60 personas packed at pairwise reward-space |cos| up to 0.6, near-neighbour
 personas are functionally interchangeable — the model gets the reward function right and the
 identity of the user wrong. A stricter test would use fewer, better-separated personas.
@@ -71,11 +77,51 @@ The honest framing is that this control closes off one explanation for the null 
 cannot represent or fit per-user structure) and leaves the other open (the structure is not
 present in the data).
 
+## Prompt count: what doubling it actually bought
+
+The pool was extended from 30 to 60 prompts (1,200 responses). The motivation was that user->axis
+was still rising with training data at 18 train prompts, so more should keep paying. **That
+prediction was wrong.** The gain is variance reduction, not a higher ceiling:
+
+| user->axis (mLoRe, K=8) | 30 prompts | 60 prompts | delta |
+|---|---|---|---|
+| seed 0 | 0.550 | 0.517 | -0.033 |
+| seed 1 | 0.583 | 0.550 | -0.033 |
+| seed 2 | 0.217 | 0.550 | +0.333 |
+| seed 42 | 0.533 | 0.583 | +0.050 |
+| **mean** | **0.471** | **0.550** | +0.079 |
+| **std** | **0.167** | **0.027** | 6x tighter |
+
+Two of four seeds went slightly down. The mean rose because one pathological seed stopped being
+pathological. Secondary metrics improved modestly: test accuracy 0.9954 -> 0.9992,
+`personal - other_user` ~0.371 -> ~0.400, vanilla user->axis 0.250 -> 0.317.
+
+The practical consequence is that at std 0.167 no single-seed comparison in this setup was
+trustworthy -- including the persona-separation sweep below. At std 0.027 they are.
+
+## Persona separation (single seed, NOT yet replicated)
+
+Measured at 30 prompts, one seed per configuration, so treat as indicative only:
+
+| personas | max abs cos | vanilla user->axis | mLoRe user->axis |
+|---|---|---|---|
+| 60 | 0.60 | 0.250 | 0.533 |
+| 26 | 0.45 | 0.385 | 0.500 |
+| 13 | 0.35 | 0.692 | 0.769 |
+
+Fewer, better-separated personas look substantially easier to identify, and the pool is
+persona-independent so this costs nothing to change. But the seed-to-seed spread at a fixed
+configuration was 0.217-0.583 at the time these were run, which is wider than the effect claimed,
+so this needs multi-seed replication before it is treated as a finding.
+
+Note the contested rate also falls (0.38 -> 0.15 -> 0.09) across those rows. That is a sampling
+artifact, not less disagreement: with 13 users each distinct pair is drawn ~1.2 times versus ~2.1
+with 60, so there is less opportunity to observe both orderings.
+
 ## Caveats
 
-- **30 prompts is few.** Splitting by prompt was mandatory to avoid the Community Alignment leak,
-  but it leaves 8 test prompts and ~30 test pairs per user. More prompts would tighten every
-  number here at a linear cost in generation.
+- **Splitting by prompt was mandatory** to avoid the Community Alignment leak. At 60 prompts this
+  leaves 15 test prompts per user.
 - **`diversity` is the quality axis** under a misleading name; see the design doc.
 - Concept vectors and pool were generated by the same model (`claude-opus-4-6`) specifically
   because cross-generator drift is large (mean cos 0.667, `repetition` -0.248).

@@ -2,7 +2,7 @@
 Run LoRe (vanilla) and mLoRe/LoReV2 on the synthetic persona dataset.
 
 This is a positive control with known ground truth: every user's reward is a known signed
-combination of concept directions, and users genuinely disagree (41% of distinct response pairs
+combination of concept directions, and users genuinely disagree (38% of distinct response pairs
 are ordered one way by some user and the other way by another). If a method cannot recover
 per-user structure HERE, its null on real data says nothing about the data.
 
@@ -55,7 +55,7 @@ def acc(D, d):
     return (D @ d > 0).float().mean().item() if len(D) else float("nan")
 
 
-def build_splits(pairs, emb, val_frac, test_frac, seed):
+def build_splits(pairs, emb, val_frac, test_frac, seed, max_train_prompts=None):
     """Per user: (train, val, test) difference matrices, split by whole prompt."""
     rng = random.Random(seed)
     prompts = sorted({p["prompt_idx"] for p in pairs})
@@ -65,11 +65,21 @@ def build_splits(pairs, emb, val_frac, test_frac, seed):
     n_val = max(1, int(round(val_frac * len(prompts)))) if val_frac else 0
     test_p = set(shuffled[:n_test])
     val_p = set(shuffled[n_test:n_test + n_val])
+    train_p = shuffled[n_test + n_val:]
+    if max_train_prompts:
+        # Restricting TRAIN prompts while holding the test set fixed isolates the effect of
+        # data-per-user: if the metric degrades as train prompts shrink, more prompts would help.
+        dropped = set(train_p[max_train_prompts:])
+        train_p = train_p[:max_train_prompts]
+    else:
+        dropped = set()
     print(f"prompt split: {len(prompts) - n_test - n_val} train / {n_val} val / {n_test} test")
 
     by_user = defaultdict(lambda: {"train": [], "val": [], "test": []})
     for p in pairs:
         d = emb[p["chosen_key"]] - emb[p["rejected_key"]]
+        if p["prompt_idx"] in dropped:
+            continue
         bucket = "test" if p["prompt_idx"] in test_p else (
             "val" if p["prompt_idx"] in val_p else "train")
         by_user[p["user_id"]][bucket].append(d)
@@ -98,6 +108,8 @@ def main():
     ap.add_argument("--alpha", type=float, default=0.0)
     ap.add_argument("--iters", type=int, default=2000)
     ap.add_argument("--lr", type=float, default=0.01)
+    ap.add_argument("--max_train_prompts", type=int, default=None,
+                    help="cap training prompts (test set held fixed) to probe data-per-user")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="results/synthetic_personas/results.json")
     args = ap.parse_args()
@@ -111,7 +123,8 @@ def main():
     cv = torch.load(args.vectors, weights_only=False)
     concepts = blob["concepts"]
 
-    users = build_splits(pairs, emb, args.val_frac, args.test_frac, args.seed)
+    users = build_splits(pairs, emb, args.val_frac, args.test_frac, args.seed,
+                         args.max_train_prompts)
     uids = sorted(users)
     ntr = [len(users[u][0]) for u in uids]
     nte = [len(users[u][2]) for u in uids]
