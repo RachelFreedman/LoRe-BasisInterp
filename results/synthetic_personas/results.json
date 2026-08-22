@@ -1,0 +1,97 @@
+{
+  "reference": {
+    "base_rm": 0.4788060290428499,
+    "global_meandiff": 0.5300737644235293,
+    "personal": 0.9184695800145467,
+    "other_user": 0.5469679234238962,
+    "oracle_planted": 1.0
+  },
+  "lore": [
+    {
+      "model": "vanilla",
+      "K": 1,
+      "test_acc": 0.5094653743008772,
+      "vs_base": 0.030659345258027326,
+      "min_abs_cos": 1.0,
+      "user_axis_match": 0.01666666753590107
+    },
+    {
+      "model": "vanilla",
+      "K": 4,
+      "test_acc": 0.9886132170756657,
+      "vs_base": 0.5098071880328159,
+      "min_abs_cos": 0.016603099182248116,
+      "user_axis_match": 0.23333333432674408
+    },
+    {
+      "model": "vanilla",
+      "K": 8,
+      "test_acc": 0.9919240266084671,
+      "vs_base": 0.5131179975656173,
+      "min_abs_cos": 0.0877872183918953,
+      "user_axis_match": 0.25
+    },
+    {
+      "model": "vanilla",
+      "K": 16,
+      "test_acc": 0.9934991548458735,
+      "vs_base": 0.5146931258030236,
+      "min_abs_cos": 0.0001837637828430161,
+      "user_axis_match": 0.30000001192092896
+    },
+    {
+      "model": "v2",
+      "K": 1,
+      "test_acc": 0.8920951187610626,
+      "vs_base": 0.4132890897182127,
+      "min_abs_cos": 1.0,
+      "user_axis_match": 0.03333333507180214
+    },
+    {
+      "model": "v2",
+      "K": 4,
+      "test_acc": 0.993028524518013,
+      "vs_base": 0.5142224954751631,
+      "min_abs_cos": 0.1236657053232193,
+      "user_axis_match": 0.3333333432674408
+    },
+    {
+      "model": "v2",
+      "K": 8,
+      "test_acc": 0.9953718433777491,
+      "vs_base": 0.5165658143348992,
+      "min_abs_cos": 0.00647150631994009,
+      "user_axis_match": 0.5333333611488342
+    },
+    {
+      "model": "v2",
+      "K": 16,
+      "test_acc": 0.9953718433777491,
+      "vs_base": 0.5165658143348992,
+      "min_abs_cos": 0.0013438775204122066,
+      "user_axis_match": 0.4833333194255829
+    }
+  ],
+  "config": {
+    "pairs": "data/synthetic_personas/pairs.json",
+    "embeddings": "data/synthetic_personas/pool_embeddings.pt",
+    "personas": "data/synthetic_personas/personas.json",
+    "vectors": "data/prism/concept_vectors_v2.pt",
+    "ranks": [
+      1,
+      4,
+      8,
+      16
+    ],
+    "val_frac": 0.15,
+    "test_frac": 0.25,
+    "lam_pop": 0.01,
+    "lam_d": 0.01,
+    "alpha": 0.0,
+    "iters": 2000,
+    "lr": 0.01,
+    "seed": 42,
+    "out": "results/synthetic_personas/results.json"
+  },
+  "n_users": 60
+}

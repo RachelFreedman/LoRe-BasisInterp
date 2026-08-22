@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .DS_Store
 test_activations.py
+
+# Embeddings: regenerate from the source JSON on GPU in ~2 min, ~48 MB if versioned
+data/prism/pair_embeddings_v*.pt
+data/synthetic_personas/pool_embeddings.pt
+
+# Smoke-test outputs and scratch artifacts
+*_smoke.pt
+*.seq_bak
+data/prism/parts/
