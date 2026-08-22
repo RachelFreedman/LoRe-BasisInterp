@@ -61,11 +61,16 @@ def design_personas(concepts, n_users, n_pref, n_dis, max_cos, seed, tries=20000
     jitter_sparsity also varies how many concepts each persona cares about, so the set is not all
     one shape.
 
-    concept_matrix ([4096, k], unit columns) makes the distinctness test run in REWARD space
-    rather than weight space. This is not cosmetic: the concepts are themselves correlated (up to
-    |cos| 0.83), so two personas with near-orthogonal weight vectors can still induce almost the
-    same reward direction sum_c w[c] * v_c. Weight-space separation would then overstate how
-    different the users really are, and the control would be easier than it looks.
+    concept_matrix ([4096, k]) makes the distinctness test run in REWARD space rather than weight
+    space. This is not cosmetic: the concepts are themselves correlated (up to |cos| 0.83), so two
+    personas with near-orthogonal weight vectors can still induce almost the same reward direction.
+
+    IT MUST BE THE SIGMA-SCALED BASIS, C / sd, not the unit-normalised C. Labels come from
+    STANDARDISED projections, so a persona's true reward direction is C @ (w / sd). The per-concept
+    sd spans 5.2 to 27.5 on this pool, so testing separation on C @ w tests the wrong vector: with
+    unit columns every requested threshold (0.60, 0.45, 0.35) still admitted persona pairs sitting
+    at |cos| ~0.95 in the space the labels actually live in. Those users are indistinguishable by
+    construction, which caps user->axis recovery at a level that has nothing to do with the method.
     """
     rng = random.Random(seed)
     k = len(concepts)
@@ -441,6 +446,16 @@ def main():
             if missing:
                 sys.exit(f"concept vectors missing for {missing}")
             cm = F.normalize(torch.stack([cv[c].float().reshape(-1) for c in concepts], 1), dim=0)
+            if os.path.exists(args.embeddings):
+                # Scale columns by 1/sd so separation is measured on the direction the labels are
+                # actually generated from, C @ (w / sd). Without the pool we cannot know sd.
+                emb = torch.load(args.embeddings, weights_only=False)
+                P = torch.stack([emb[k] for k in sorted(emb)]).float() @ cm
+                cm = cm / P.std(0).clamp_min(1e-6)
+                print("separation measured on the sigma-scaled (true planted) basis")
+            else:
+                print(f"WARNING: {args.embeddings} not found; separation will be measured on the "
+                      f"unit concept basis, which is NOT the direction labels come from")
         else:
             print(f"WARNING: {args.vectors} not found, falling back to weight-space separation")
         personas = design_personas(concepts, args.n_users, args.n_pref, args.n_dis,
