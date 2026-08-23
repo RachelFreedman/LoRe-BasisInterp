@@ -1,0 +1,39 @@
+Loading real PRISM diff pools:
+  train: /root/LoRe-BasisInterp/PRISM/../data/prism/train_embeddings.pkl
+  test:  /root/LoRe-BasisInterp/PRISM/../data/prism/test_embeddings.pkl
+19638 real train diffs, 19727 real test diffs (dim=4096)
+mode=bipolar source=concept directions=['fluency'] users_per_group=20 k_fit=4 model=v2
+w_recovery chance = 0.500 (2 groups)
+
+ signal | pairs/usr | test_acc | subspace |   axis | w_recov | grp_dir | personal |  global
+--------------------------------------------------------------------------------------------
+   0.00 |        15 |   0.5413 |   0.0059 | 0.0047 |  0.3800 |  0.5250 |   0.5414 |  0.5724
+   0.00 |        50 |   0.5511 |   0.0098 | 0.0093 |  0.3800 |  0.4850 |   0.5629 |  0.5744
+   0.00 |       100 |   0.5618 |   0.0004 | 0.0003 |  0.3650 |  0.5050 |   0.5675 |  0.5726
+   0.00 |       400 |   0.5790 |   0.0006 | 0.0004 |  0.3700 |  0.4950 |   0.5733 |  0.5723
+   0.00 |      1000 |   0.5868 |   0.0008 | 0.0005 |  0.3300 |  0.5150 |   0.5761 |  0.5758
+   0.50 |        15 |   0.8274 |   0.6353 | 0.4700 |  0.3550 |  0.9800 |   0.8778 |  0.5724
+   0.50 |        50 |   0.8615 |   0.3385 | 0.2230 |  0.3700 |  1.0000 |   0.8905 |  0.5726
+   0.50 |       100 |   0.8739 |   0.2636 | 0.1650 |  0.3800 |  1.0000 |   0.8953 |  0.5730
+   0.50 |       400 |   0.8950 |   0.2542 | 0.1496 |  0.4000 |  1.0000 |   0.8971 |  0.5715
+   0.50 |      1000 |   0.9001 |   0.3410 | 0.2088 |  0.3950 |  1.0000 |   0.8974 |  0.5755
+   1.00 |        15 |   0.8349 |   0.3993 | 0.3263 |  0.3950 |  0.9850 |   0.8982 |  0.5722
+   1.00 |        50 |   0.8587 |   0.1636 | 0.1065 |  0.3700 |  1.0000 |   0.8983 |  0.5736
+   1.00 |       100 |   0.8757 |   0.1382 | 0.0884 |  0.3900 |  1.0000 |   0.9006 |  0.5716
+   1.00 |       400 |   0.8960 |   0.1502 | 0.0941 |  0.3750 |  1.0000 |   0.9012 |  0.5715
+   1.00 |      1000 |   0.9005 |   0.2188 | 0.1442 |  0.4200 |  1.0000 |   0.9012 |  0.5757
+   2.00 |        15 |   0.8290 |   0.2121 | 0.1868 |  0.3800 |  0.9900 |   0.8984 |  0.5585
+   2.00 |        50 |   0.8621 |   0.0806 | 0.0510 |  0.4100 |  1.0000 |   0.8983 |  0.5639
+   2.00 |       100 |   0.8794 |   0.0654 | 0.0395 |  0.4700 |  1.0000 |   0.9006 |  0.5612
+   2.00 |       400 |   0.8982 |   0.0878 | 0.0580 |  0.4300 |  1.0000 |   0.9012 |  0.5725
+   2.00 |      1000 |   0.9007 |   0.1688 | 0.1313 |  0.4500 |  1.0000 |   0.9012 |  0.5758
+   4.00 |        15 |   0.8353 |   0.0837 | 0.0723 |  0.4150 |  0.9950 |   0.8984 |  0.5308
+   4.00 |        50 |   0.8722 |   0.0663 | 0.0434 |  0.4800 |  1.0000 |   0.8983 |  0.5258
+   4.00 |       100 |   0.8895 |   0.0624 | 0.0471 |  0.6350 |  1.0000 |   0.9006 |  0.5321
+   4.00 |       400 |   0.9008 |   0.1738 | 0.1397 |  0.5400 |  1.0000 |   0.9012 |  0.5546
+   4.00 |      1000 |   0.9012 |   0.2177 | 0.1792 |  0.5250 |  1.0000 |   0.9012 |  0.5618
+
+random-basis floor: subspace=0.0305  axis_match=0.0248
+
+Saved ../results/synthetic/prism_perturbation_bipolar_fluency_v2.csv
+Read-out: signal_scale=0 rows show natural separation in real PRISM pairs with no injection. Recovery emerging only at higher signal_scale (not 0) means the direction has no meaningful natural presence in this data on its own. Recovery failing to reach the pairs/user=15 regime even at high signal_scale would localize the original PRISM null to data volume specifically. Recovery failing at ALL signal_scale/pairs_per_user combinations would implicate the representation itself, not data volume -- check personal > global held throughout before trusting that reading.
