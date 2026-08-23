@@ -1,0 +1,11 @@
+221906 pairs loaded
+941 users >= 100 pairs; 66540 held-out test pairs across 941 users
+
+Predict preferred = longer response (chars)
+  overall accuracy (pooled over all held-out pairs) : 0.4976
+  per-user accuracy: mean=0.4958  std=0.1040  n_users=941
+  ties (chosen/rejected exactly same length)        : 273/66540
+
+Reference (Mohamed, 200 users, chars): 0.4969 (chance-level)
+
+Read-out: accuracy near 0.5 means length alone carries no real preference signal here -- wbar's length correlation (Part C) is a coincidental correlate, not the driver of its concept-alignment results. Accuracy meaningfully above 0.5 means length IS predictive at this scale, and Part C's concept-alignment numbers should be re-examined for whether they're tracking length rather than the named concepts.
