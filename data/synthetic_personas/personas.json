@@ -1,0 +1,1070 @@
+{
+  "concepts": [
+    "humor",
+    "technicality",
+    "verbosity",
+    "fluency",
+    "warmth",
+    "repetition",
+    "confidence",
+    "formality",
+    "diversity",
+    "concreteness"
+  ],
+  "personas": [
+    {
+      "user_id": "synth_000",
+      "preferred": [
+        "humor",
+        "warmth",
+        "formality"
+      ],
+      "dispreferred": [
+        "fluency",
+        "verbosity",
+        "confidence"
+      ],
+      "weights": {
+        "humor": 0.4108888506889343,
+        "verbosity": -0.3063511252403259,
+        "fluency": -0.30612507462501526,
+        "warmth": 0.6664160490036011,
+        "confidence": -0.28484296798706055,
+        "formality": 0.3440362811088562
+      }
+    },
+    {
+      "user_id": "synth_001",
+      "preferred": [
+        "repetition"
+      ],
+      "dispreferred": [
+        "fluency",
+        "concreteness",
+        "formality"
+      ],
+      "weights": {
+        "fluency": -0.3437805473804474,
+        "repetition": 0.6817591786384583,
+        "formality": -0.3674343526363373,
+        "concreteness": -0.5310474634170532
+      }
+    },
+    {
+      "user_id": "synth_002",
+      "preferred": [
+        "technicality",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "repetition",
+        "warmth",
+        "fluency"
+      ],
+      "weights": {
+        "technicality": 0.2538432776927948,
+        "fluency": -0.5478438138961792,
+        "warmth": -0.43655267357826233,
+        "repetition": -0.5028709769248962,
+        "concreteness": 0.4381474554538727
+      }
+    },
+    {
+      "user_id": "synth_003",
+      "preferred": [
+        "fluency",
+        "confidence"
+      ],
+      "dispreferred": [
+        "warmth",
+        "concreteness"
+      ],
+      "weights": {
+        "fluency": 0.40777483582496643,
+        "warmth": -0.4930429458618164,
+        "confidence": 0.46879446506500244,
+        "concreteness": -0.6089828014373779
+      }
+    },
+    {
+      "user_id": "synth_004",
+      "preferred": [
+        "fluency"
+      ],
+      "dispreferred": [
+        "humor",
+        "technicality"
+      ],
+      "weights": {
+        "humor": -0.6795530319213867,
+        "technicality": -0.6623926758766174,
+        "fluency": 0.3153466582298279
+      }
+    },
+    {
+      "user_id": "synth_005",
+      "preferred": [
+        "humor",
+        "concreteness",
+        "confidence"
+      ],
+      "dispreferred": [
+        "warmth",
+        "diversity"
+      ],
+      "weights": {
+        "humor": 0.6717731356620789,
+        "warmth": -0.40282246470451355,
+        "confidence": 0.2876221835613251,
+        "diversity": -0.470712274312973,
+        "concreteness": 0.28663283586502075
+      }
+    },
+    {
+      "user_id": "synth_006",
+      "preferred": [
+        "fluency",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "formality",
+        "diversity"
+      ],
+      "weights": {
+        "fluency": 0.5404969453811646,
+        "formality": -0.6138170957565308,
+        "diversity": -0.23736830055713654,
+        "concreteness": 0.524164080619812
+      }
+    },
+    {
+      "user_id": "synth_007",
+      "preferred": [
+        "concreteness",
+        "confidence",
+        "diversity"
+      ],
+      "dispreferred": [
+        "warmth",
+        "fluency"
+      ],
+      "weights": {
+        "fluency": -0.38642609119415283,
+        "warmth": -0.5100475549697876,
+        "confidence": 0.47246211767196655,
+        "diversity": 0.4539935886859894,
+        "concreteness": 0.4014919400215149
+      }
+    },
+    {
+      "user_id": "synth_008",
+      "preferred": [
+        "technicality",
+        "diversity"
+      ],
+      "dispreferred": [
+        "confidence",
+        "warmth"
+      ],
+      "weights": {
+        "technicality": 0.463508665561676,
+        "warmth": -0.6135591268539429,
+        "confidence": -0.532955527305603,
+        "diversity": 0.3530770540237427
+      }
+    },
+    {
+      "user_id": "synth_009",
+      "preferred": [
+        "technicality"
+      ],
+      "dispreferred": [
+        "concreteness",
+        "verbosity",
+        "fluency"
+      ],
+      "weights": {
+        "technicality": 0.3685530722141266,
+        "verbosity": -0.6576326489448547,
+        "fluency": -0.5030351281166077,
+        "concreteness": -0.42266249656677246
+      }
+    },
+    {
+      "user_id": "synth_010",
+      "preferred": [
+        "warmth",
+        "concreteness",
+        "formality"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "diversity",
+        "technicality"
+      ],
+      "weights": {
+        "technicality": -0.49342429637908936,
+        "verbosity": -0.46081990003585815,
+        "warmth": 0.2775193452835083,
+        "formality": 0.3722788393497467,
+        "diversity": -0.2701124846935272,
+        "concreteness": 0.5055770874023438
+      }
+    },
+    {
+      "user_id": "synth_011",
+      "preferred": [
+        "confidence"
+      ],
+      "dispreferred": [
+        "fluency",
+        "diversity"
+      ],
+      "weights": {
+        "fluency": -0.6618355512619019,
+        "confidence": 0.4200749695301056,
+        "diversity": -0.6208952069282532
+      }
+    },
+    {
+      "user_id": "synth_012",
+      "preferred": [
+        "confidence",
+        "warmth",
+        "formality"
+      ],
+      "dispreferred": [
+        "concreteness"
+      ],
+      "weights": {
+        "warmth": 0.716766357421875,
+        "confidence": 0.273261696100235,
+        "formality": 0.4583113491535187,
+        "concreteness": -0.448915034532547
+      }
+    },
+    {
+      "user_id": "synth_013",
+      "preferred": [
+        "concreteness",
+        "formality",
+        "repetition"
+      ],
+      "dispreferred": [
+        "confidence"
+      ],
+      "weights": {
+        "repetition": 0.36177611351013184,
+        "confidence": -0.6144665479660034,
+        "formality": 0.4947390854358673,
+        "concreteness": 0.49677181243896484
+      }
+    },
+    {
+      "user_id": "synth_014",
+      "preferred": [
+        "diversity",
+        "verbosity",
+        "humor"
+      ],
+      "dispreferred": [
+        "formality",
+        "warmth",
+        "concreteness"
+      ],
+      "weights": {
+        "humor": 0.5178304314613342,
+        "verbosity": 0.24220965802669525,
+        "warmth": -0.4131039083003998,
+        "formality": -0.4983084201812744,
+        "diversity": 0.3662758767604828,
+        "concreteness": -0.346499502658844
+      }
+    },
+    {
+      "user_id": "synth_015",
+      "preferred": [
+        "diversity"
+      ],
+      "dispreferred": [
+        "confidence"
+      ],
+      "weights": {
+        "confidence": -0.5034496188163757,
+        "diversity": 0.8640245795249939
+      }
+    },
+    {
+      "user_id": "synth_016",
+      "preferred": [
+        "humor",
+        "confidence"
+      ],
+      "dispreferred": [
+        "repetition"
+      ],
+      "weights": {
+        "humor": 0.4705304503440857,
+        "repetition": -0.4633837044239044,
+        "confidence": 0.7509171366691589
+      }
+    },
+    {
+      "user_id": "synth_017",
+      "preferred": [
+        "concreteness"
+      ],
+      "dispreferred": [
+        "technicality",
+        "warmth"
+      ],
+      "weights": {
+        "technicality": -0.587877631187439,
+        "warmth": -0.5398893356323242,
+        "concreteness": 0.6024280786514282
+      }
+    },
+    {
+      "user_id": "synth_018",
+      "preferred": [
+        "verbosity",
+        "formality"
+      ],
+      "dispreferred": [
+        "warmth",
+        "confidence",
+        "technicality"
+      ],
+      "weights": {
+        "technicality": -0.5509081482887268,
+        "verbosity": 0.5005197525024414,
+        "warmth": -0.3193117082118988,
+        "confidence": -0.5059601068496704,
+        "formality": 0.29668933153152466
+      }
+    },
+    {
+      "user_id": "synth_019",
+      "preferred": [
+        "technicality",
+        "repetition"
+      ],
+      "dispreferred": [
+        "diversity"
+      ],
+      "weights": {
+        "technicality": 0.6480679512023926,
+        "repetition": 0.47526195645332336,
+        "diversity": -0.5950915813446045
+      }
+    },
+    {
+      "user_id": "synth_020",
+      "preferred": [
+        "diversity",
+        "warmth",
+        "technicality"
+      ],
+      "dispreferred": [
+        "humor",
+        "confidence",
+        "verbosity"
+      ],
+      "weights": {
+        "humor": -0.46844762563705444,
+        "technicality": 0.5021581053733826,
+        "verbosity": -0.2868947684764862,
+        "warmth": 0.3575426936149597,
+        "confidence": -0.4468246102333069,
+        "diversity": 0.34437841176986694
+      }
+    },
+    {
+      "user_id": "synth_021",
+      "preferred": [
+        "confidence",
+        "fluency",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "repetition",
+        "technicality"
+      ],
+      "weights": {
+        "technicality": -0.5459465980529785,
+        "fluency": 0.549917459487915,
+        "repetition": -0.362402081489563,
+        "confidence": 0.32240065932273865,
+        "concreteness": 0.40528470277786255
+      }
+    },
+    {
+      "user_id": "synth_022",
+      "preferred": [
+        "diversity"
+      ],
+      "dispreferred": [
+        "formality",
+        "warmth",
+        "verbosity"
+      ],
+      "weights": {
+        "verbosity": -0.6658444404602051,
+        "warmth": -0.25292566418647766,
+        "formality": -0.27595120668411255,
+        "diversity": 0.6453918814659119
+      }
+    },
+    {
+      "user_id": "synth_023",
+      "preferred": [
+        "concreteness"
+      ],
+      "dispreferred": [
+        "diversity"
+      ],
+      "weights": {
+        "diversity": -0.6117823123931885,
+        "concreteness": 0.7910261750221252
+      }
+    },
+    {
+      "user_id": "synth_024",
+      "preferred": [
+        "warmth"
+      ],
+      "dispreferred": [
+        "humor",
+        "repetition",
+        "concreteness"
+      ],
+      "weights": {
+        "humor": -0.5001548528671265,
+        "warmth": 0.4226347506046295,
+        "repetition": -0.505760133266449,
+        "concreteness": -0.5616330504417419
+      }
+    },
+    {
+      "user_id": "synth_025",
+      "preferred": [
+        "warmth",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "diversity",
+        "humor",
+        "repetition"
+      ],
+      "weights": {
+        "humor": -0.4733603298664093,
+        "warmth": 0.4816032350063324,
+        "repetition": -0.6061884760856628,
+        "diversity": -0.2558547258377075,
+        "concreteness": 0.33326002955436707
+      }
+    },
+    {
+      "user_id": "synth_026",
+      "preferred": [
+        "fluency",
+        "concreteness",
+        "diversity"
+      ],
+      "dispreferred": [
+        "formality",
+        "repetition"
+      ],
+      "weights": {
+        "fluency": 0.4208992123603821,
+        "repetition": -0.49422964453697205,
+        "formality": -0.4675048589706421,
+        "diversity": 0.5508749485015869,
+        "concreteness": 0.23781690001487732
+      }
+    },
+    {
+      "user_id": "synth_027",
+      "preferred": [
+        "humor",
+        "verbosity"
+      ],
+      "dispreferred": [
+        "warmth"
+      ],
+      "weights": {
+        "humor": 0.37221893668174744,
+        "verbosity": 0.6061944961547852,
+        "warmth": -0.7028380632400513
+      }
+    },
+    {
+      "user_id": "synth_028",
+      "preferred": [
+        "concreteness"
+      ],
+      "dispreferred": [
+        "confidence"
+      ],
+      "weights": {
+        "confidence": -0.7682109475135803,
+        "concreteness": 0.6401968598365784
+      }
+    },
+    {
+      "user_id": "synth_029",
+      "preferred": [
+        "fluency",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "verbosity"
+      ],
+      "weights": {
+        "verbosity": -0.46689674258232117,
+        "fluency": 0.5399388074874878,
+        "concreteness": 0.7003381252288818
+      }
+    },
+    {
+      "user_id": "synth_030",
+      "preferred": [
+        "formality",
+        "humor",
+        "diversity"
+      ],
+      "dispreferred": [
+        "concreteness",
+        "fluency"
+      ],
+      "weights": {
+        "humor": 0.5787690281867981,
+        "fluency": -0.49151143431663513,
+        "formality": 0.32072487473487854,
+        "diversity": 0.3297525942325592,
+        "concreteness": -0.460262656211853
+      }
+    },
+    {
+      "user_id": "synth_031",
+      "preferred": [
+        "formality",
+        "verbosity",
+        "confidence"
+      ],
+      "dispreferred": [
+        "repetition",
+        "technicality",
+        "warmth"
+      ],
+      "weights": {
+        "technicality": -0.48158979415893555,
+        "verbosity": 0.5621437430381775,
+        "warmth": -0.25515273213386536,
+        "repetition": -0.45961713790893555,
+        "confidence": 0.27782073616981506,
+        "formality": 0.31389543414115906
+      }
+    },
+    {
+      "user_id": "synth_032",
+      "preferred": [
+        "verbosity"
+      ],
+      "dispreferred": [
+        "repetition",
+        "confidence",
+        "technicality"
+      ],
+      "weights": {
+        "technicality": -0.4716373085975647,
+        "verbosity": 0.6363543272018433,
+        "repetition": -0.5509827733039856,
+        "confidence": -0.2627343237400055
+      }
+    },
+    {
+      "user_id": "synth_033",
+      "preferred": [
+        "repetition",
+        "humor"
+      ],
+      "dispreferred": [
+        "formality",
+        "diversity"
+      ],
+      "weights": {
+        "humor": 0.4520907998085022,
+        "repetition": 0.49598556756973267,
+        "formality": -0.38207244873046875,
+        "diversity": -0.6353211402893066
+      }
+    },
+    {
+      "user_id": "synth_034",
+      "preferred": [
+        "confidence",
+        "fluency"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "warmth",
+        "formality"
+      ],
+      "weights": {
+        "verbosity": -0.545843243598938,
+        "fluency": 0.4253753423690796,
+        "warmth": -0.33557355403900146,
+        "confidence": 0.43223100900650024,
+        "formality": -0.47082656621932983
+      }
+    },
+    {
+      "user_id": "synth_035",
+      "preferred": [
+        "diversity",
+        "warmth"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "concreteness"
+      ],
+      "weights": {
+        "verbosity": -0.5160699486732483,
+        "warmth": 0.5128394365310669,
+        "diversity": 0.42233771085739136,
+        "concreteness": -0.5406462550163269
+      }
+    },
+    {
+      "user_id": "synth_036",
+      "preferred": [
+        "repetition",
+        "verbosity"
+      ],
+      "dispreferred": [
+        "concreteness",
+        "warmth"
+      ],
+      "weights": {
+        "verbosity": 0.6112066507339478,
+        "warmth": -0.3902464210987091,
+        "repetition": 0.6308175325393677,
+        "concreteness": -0.27604973316192627
+      }
+    },
+    {
+      "user_id": "synth_037",
+      "preferred": [
+        "fluency",
+        "warmth",
+        "verbosity"
+      ],
+      "dispreferred": [
+        "humor",
+        "confidence"
+      ],
+      "weights": {
+        "humor": -0.6135503053665161,
+        "verbosity": 0.30962157249450684,
+        "fluency": 0.49596649408340454,
+        "warmth": 0.32949098944664,
+        "confidence": -0.41610515117645264
+      }
+    },
+    {
+      "user_id": "synth_038",
+      "preferred": [
+        "fluency",
+        "technicality",
+        "confidence"
+      ],
+      "dispreferred": [
+        "formality",
+        "warmth"
+      ],
+      "weights": {
+        "technicality": 0.4860982596874237,
+        "fluency": 0.4243905544281006,
+        "warmth": -0.3207727074623108,
+        "confidence": 0.4673733711242676,
+        "formality": -0.5121212005615234
+      }
+    },
+    {
+      "user_id": "synth_039",
+      "preferred": [
+        "diversity",
+        "fluency",
+        "repetition"
+      ],
+      "dispreferred": [
+        "verbosity"
+      ],
+      "weights": {
+        "verbosity": -0.4857373535633087,
+        "fluency": 0.40540388226509094,
+        "repetition": 0.5203256011009216,
+        "diversity": 0.5735573768615723
+      }
+    },
+    {
+      "user_id": "synth_040",
+      "preferred": [
+        "formality",
+        "warmth"
+      ],
+      "dispreferred": [
+        "repetition",
+        "technicality",
+        "fluency"
+      ],
+      "weights": {
+        "technicality": -0.43506377935409546,
+        "fluency": -0.39996618032455444,
+        "warmth": 0.40104174613952637,
+        "repetition": -0.48557060956954956,
+        "formality": 0.5041162967681885
+      }
+    },
+    {
+      "user_id": "synth_041",
+      "preferred": [
+        "confidence",
+        "diversity"
+      ],
+      "dispreferred": [
+        "repetition",
+        "verbosity",
+        "concreteness"
+      ],
+      "weights": {
+        "verbosity": -0.4949791431427002,
+        "repetition": -0.5254978537559509,
+        "confidence": 0.45744794607162476,
+        "diversity": 0.4666156470775604,
+        "concreteness": -0.22772544622421265
+      }
+    },
+    {
+      "user_id": "synth_042",
+      "preferred": [
+        "technicality",
+        "fluency",
+        "diversity"
+      ],
+      "dispreferred": [
+        "formality",
+        "verbosity",
+        "concreteness"
+      ],
+      "weights": {
+        "technicality": 0.45377227663993835,
+        "verbosity": -0.40719833970069885,
+        "fluency": 0.4259662926197052,
+        "formality": -0.45893359184265137,
+        "diversity": 0.41705992817878723,
+        "concreteness": -0.24954771995544434
+      }
+    },
+    {
+      "user_id": "synth_043",
+      "preferred": [
+        "humor"
+      ],
+      "dispreferred": [
+        "technicality",
+        "repetition",
+        "fluency"
+      ],
+      "weights": {
+        "humor": 0.3212999701499939,
+        "technicality": -0.5906660556793213,
+        "fluency": -0.6245565414428711,
+        "repetition": -0.39725202322006226
+      }
+    },
+    {
+      "user_id": "synth_044",
+      "preferred": [
+        "concreteness",
+        "fluency"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "confidence",
+        "humor"
+      ],
+      "weights": {
+        "humor": -0.59905606508255,
+        "verbosity": -0.3804795742034912,
+        "fluency": 0.3428250551223755,
+        "confidence": -0.5291628241539001,
+        "concreteness": 0.31436416506767273
+      }
+    },
+    {
+      "user_id": "synth_045",
+      "preferred": [
+        "fluency",
+        "concreteness",
+        "warmth"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "humor"
+      ],
+      "weights": {
+        "humor": -0.36672839522361755,
+        "verbosity": -0.3813604414463043,
+        "fluency": 0.6202213764190674,
+        "warmth": 0.5271293520927429,
+        "concreteness": 0.23986364901065826
+      }
+    },
+    {
+      "user_id": "synth_046",
+      "preferred": [
+        "warmth"
+      ],
+      "dispreferred": [
+        "fluency",
+        "concreteness",
+        "repetition"
+      ],
+      "weights": {
+        "fluency": -0.7385568618774414,
+        "warmth": 0.28225061297416687,
+        "repetition": -0.404313862323761,
+        "concreteness": -0.45978111028671265
+      }
+    },
+    {
+      "user_id": "synth_047",
+      "preferred": [
+        "concreteness",
+        "formality",
+        "warmth"
+      ],
+      "dispreferred": [
+        "diversity"
+      ],
+      "weights": {
+        "warmth": 0.24937130510807037,
+        "formality": 0.48615413904190063,
+        "diversity": -0.6189572811126709,
+        "concreteness": 0.5642339587211609
+      }
+    },
+    {
+      "user_id": "synth_048",
+      "preferred": [
+        "humor",
+        "formality"
+      ],
+      "dispreferred": [
+        "fluency"
+      ],
+      "weights": {
+        "humor": 0.4218406081199646,
+        "fluency": -0.6248196959495544,
+        "formality": 0.6570014357566833
+      }
+    },
+    {
+      "user_id": "synth_049",
+      "preferred": [
+        "warmth"
+      ],
+      "dispreferred": [
+        "humor",
+        "diversity"
+      ],
+      "weights": {
+        "humor": -0.44804802536964417,
+        "warmth": 0.5801312923431396,
+        "diversity": -0.6802210807800293
+      }
+    },
+    {
+      "user_id": "synth_050",
+      "preferred": [
+        "technicality",
+        "verbosity"
+      ],
+      "dispreferred": [
+        "formality",
+        "warmth"
+      ],
+      "weights": {
+        "technicality": 0.3953065276145935,
+        "verbosity": 0.36543047428131104,
+        "warmth": -0.4895178973674774,
+        "formality": -0.6859778165817261
+      }
+    },
+    {
+      "user_id": "synth_051",
+      "preferred": [
+        "warmth",
+        "fluency",
+        "concreteness"
+      ],
+      "dispreferred": [
+        "diversity"
+      ],
+      "weights": {
+        "fluency": 0.6330748796463013,
+        "warmth": 0.2611047923564911,
+        "diversity": -0.4564979672431946,
+        "concreteness": 0.5680229663848877
+      }
+    },
+    {
+      "user_id": "synth_052",
+      "preferred": [
+        "technicality"
+      ],
+      "dispreferred": [
+        "formality",
+        "humor",
+        "concreteness"
+      ],
+      "weights": {
+        "humor": -0.6064795851707458,
+        "technicality": 0.2654043138027191,
+        "formality": -0.4569072723388672,
+        "concreteness": -0.5941202044487
+      }
+    },
+    {
+      "user_id": "synth_053",
+      "preferred": [
+        "humor",
+        "technicality",
+        "repetition"
+      ],
+      "dispreferred": [
+        "concreteness",
+        "fluency"
+      ],
+      "weights": {
+        "humor": 0.5795465707778931,
+        "technicality": 0.3702823519706726,
+        "fluency": -0.31975993514060974,
+        "repetition": 0.5813019275665283,
+        "concreteness": -0.2947178781032562
+      }
+    },
+    {
+      "user_id": "synth_054",
+      "preferred": [
+        "confidence",
+        "humor"
+      ],
+      "dispreferred": [
+        "concreteness",
+        "fluency"
+      ],
+      "weights": {
+        "humor": 0.3864927589893341,
+        "fluency": -0.516198456287384,
+        "confidence": 0.4792781472206116,
+        "concreteness": -0.5953611731529236
+      }
+    },
+    {
+      "user_id": "synth_055",
+      "preferred": [
+        "concreteness",
+        "verbosity"
+      ],
+      "dispreferred": [
+        "diversity",
+        "confidence",
+        "humor"
+      ],
+      "weights": {
+        "humor": -0.5102871060371399,
+        "verbosity": 0.40521901845932007,
+        "confidence": -0.3910330832004547,
+        "diversity": -0.5498975515365601,
+        "concreteness": 0.3465694189071655
+      }
+    },
+    {
+      "user_id": "synth_056",
+      "preferred": [
+        "technicality",
+        "warmth",
+        "fluency"
+      ],
+      "dispreferred": [
+        "humor",
+        "formality",
+        "diversity"
+      ],
+      "weights": {
+        "humor": -0.2589918076992035,
+        "technicality": 0.5336852669715881,
+        "fluency": 0.24814502894878387,
+        "warmth": 0.2922164797782898,
+        "formality": -0.5900111794471741,
+        "diversity": -0.39118245244026184
+      }
+    },
+    {
+      "user_id": "synth_057",
+      "preferred": [
+        "confidence",
+        "warmth",
+        "technicality"
+      ],
+      "dispreferred": [
+        "verbosity",
+        "concreteness"
+      ],
+      "weights": {
+        "technicality": 0.2746789753437042,
+        "verbosity": -0.48304483294487,
+        "warmth": 0.4774705469608307,
+        "confidence": 0.4941941797733307,
+        "concreteness": -0.4679882228374481
+      }
+    },
+    {
+      "user_id": "synth_058",
+      "preferred": [
+        "diversity"
+      ],
+      "dispreferred": [
+        "confidence",
+        "verbosity"
+      ],
+      "weights": {
+        "verbosity": -0.5322402715682983,
+        "confidence": -0.6075252294540405,
+        "diversity": 0.589604377746582
+      }
+    },
+    {
+      "user_id": "synth_059",
+      "preferred": [
+        "fluency",
+        "confidence",
+        "repetition"
+      ],
+      "dispreferred": [
+        "formality",
+        "diversity"
+      ],
+      "weights": {
+        "fluency": 0.5561269521713257,
+        "repetition": 0.3711036741733551,
+        "confidence": 0.5444217324256897,
+        "formality": -0.3276282846927643,
+        "diversity": -0.3863539695739746
+      }
+    }
+  ]
+}
