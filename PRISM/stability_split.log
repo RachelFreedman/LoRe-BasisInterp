@@ -1,0 +1,29 @@
+221906 pairs, 230238 embeddings
+
+[run 0] split=0  (split_seed=0, init_seed=42)  941 users
+
+[run 1] split=1  (split_seed=1, init_seed=42)  941 users
+
+[run 2] split=2  (split_seed=2, init_seed=42)  941 users
+
+[run 3] split=3  (split_seed=3, init_seed=42)  941 users
+
+[run 4] split=4  (split_seed=4, init_seed=42)  941 users
+
+##########################################################################################
+# STABILITY CHECK: split  (varying [0, 1, 2, 3, 4])
+##########################################################################################
+
+Population direction (v_pop = unit(V @ wbar)), pairwise cosine across runs:
+  v_pop                 : mean=+0.9189  std=0.0023  min=+0.9157  max=+0.9231  (n_pairs=10)
+
+Per-user directions (v_u = unit(V @ (wbar + delta_u))), pairwise cosine across runs, averaged over users:
+  per-user (avg)        : mean=+0.9188  std=0.0008  min=+0.9168  max=+0.9223  (n_users=941)
+
+Isotropic random-direction baseline (n=200, see docstring caveat):
+  random vs random      : mean=-0.0001  std=0.0156  min=-0.0610  max=+0.0631  (n_pairs=19900)
+
+------------------------------------------------------------------------------------------
+v_pop stability   : +0.9189 (vs random baseline -0.0001)
+per-user stability: +0.9188 (vs random baseline -0.0001)
+Read-out: stability meaningfully above the random baseline (and its std) means the learned direction(s) are reproducible, not an artifact of this particular run. Stability indistinguishable from the random baseline means whatever gets interpreted downstream may just be describing this one run.
