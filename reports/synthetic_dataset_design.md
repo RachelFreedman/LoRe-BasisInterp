@@ -1,6 +1,6 @@
 # Synthetic preference dataset — design decisions
 
-Owner: Mohamed. Red-teamers: Harsh, Ifesi.
+Owner and red-teamers: anonymized for review.
 
 The draft spec builds the dataset on the existing library of 11 concepts:
 `{helpfulness, fluency, factuality, safety, diversity, creativity, values, confidence,
