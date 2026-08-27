@@ -12,16 +12,6 @@ seeds and across data splits, or do they vary run to run?
                   split). Answers: does the learned direction depend on
                   which held-out pairs happened to get excluded?
 
-IMPORTANT -- rotational ambiguity: LoReV2
-drops the simplex, so V -> VR, w -> R^-1 w leaves the loss unchanged for any
-invertible R. Comparing raw V columns or raw wbar across runs would treat
-this arbitrary rotation as "instability" when the actual reward function is
-identical. This script never compares raw V/wbar/delta directly -- only the
-ROTATION-INVARIANT induced directions:
-    v_pop   = unit(V @ wbar)                    (population direction)
-    v_u     = unit(V @ (wbar + delta_u))         (each user's full direction)
-Both are invariant under V->VR, w->R^-1w (V@wbar = VR @ R^-1wbar), so this
-sidesteps the ambiguity rather than needing to solve it.
 
 Baseline: pairwise cosine among N isotropic random unit directions in the
 same 4096-dim space, for a numeric sense of "near 0" in this space. 
@@ -56,10 +46,11 @@ import torch.nn.functional as F
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 sys.path.append(SCRIPT_DIR)
-from utils import LoReV2                              # noqa: E402
-from community_alignment_lore import build_user_diffs  # noqa: E402
-from random_baseline import random_unit_directions      # noqa: E402
-from synthetic_recovery import eval_acc                 # noqa: E402
+from utils import LoReV2                              
+from community_alignment_lore import build_user_diffs  
+from random_baseline import random_unit_directions      
+from synthetic_recovery import eval_acc             
+from rm_head_utils import load_reward_head               
 
 
 def unit(v):
@@ -68,10 +59,6 @@ def unit(v):
 
 def fit_one_run(train_feats, num_features, rank, lam_pop, lam_d, iters, lr, val_feats=None,
                 test_feats=None):
-    """Train LoReV2 once and return (v_pop [F], per_user_dirs dict[user_idx -> [F]],
-    train_acc, test_acc). Accuracy uses eval_acc() -- the same function
-    community_alignment_lore.py's head-to-head report uses -- so numbers here
-    are directly comparable to that report, not a separately-defined metric."""
     model = LoReV2(len(train_feats), num_features, rank, lam_pop=lam_pop, lam_d=lam_d,
                    num_iterations=iters, learning_rate=lr, verbose=False)
     W_eff, V = model.train(train_feats, val=val_feats)
@@ -96,14 +83,7 @@ def pairwise_cosines(vectors):
 
 
 def print_cosine_matrix(labels, vectors, title):
-    """Full NxN pairwise cosine matrix, not just the aggregate mean/std.
-
-    Added because an aggregate mean+std over a handful of seed-pairs cannot
-    distinguish two very different stories: moderate uniform noise around
-    one solution (all off-diagonal entries similar) vs. multiple distinct
-    basins the optimizer lands in depending on init (a block/cluster
-    pattern -- some pairs near 1.0, others much lower, in a structured way
-    rather than randomly scattered). """
+    """Full NxN pairwise cosine matrix, not just the aggregate mean/std. """
     n = len(vectors)
     print(f"\n{title} -- full {n}x{n} pairwise cosine matrix:")
     header = "        " + "".join(f"{str(l):>9}" for l in labels)
@@ -117,9 +97,6 @@ def print_cosine_matrix(labels, vectors, title):
                 cos_ij = float((vectors[i] @ vectors[j]).item())
                 row += f"{cos_ij:>9.4f}"
         print(row)
-    print("(Look for block structure -- e.g. some seeds mutually ~0.95 while others are "
-          "mutually ~0.95 but the TWO GROUPS sit around ~0.7 with each other -- that pattern "
-          "would mean multiple distinct basins, not uniform noise around one solution.)")
 
 
 def summarize(name, sims):
@@ -207,10 +184,6 @@ def main():
     common_uids = set.intersection(*uid_sets)
     if any(s != uid_sets[0] for s in uid_sets):
         dropped = set.union(*uid_sets) - common_uids
-        print(f"\n[warn] user set differed across runs ({len(dropped)} users not common to "
-              f"all runs) -- restricting per-user comparison to the {len(common_uids)} "
-              f"common users. This itself may be worth reporting if it happens on --check "
-              f"split, since it would mean min_pairs filtering isn't fully split-invariant.")
 
     print("\n" + "#" * 90)
     print(f"# STABILITY CHECK: {args.check}  (varying {args.seeds})")
@@ -243,13 +216,27 @@ def main():
           f"std={per_user_means.std():.4f}  min={per_user_means.min():+.4f}  "
           f"max={per_user_means.max():+.4f}  (n_users={len(per_user_means)})")
 
-    print(f"\nIsotropic random-direction baseline (n={args.n_baseline}, see docstring caveat):")
     base_dirs = random_unit_directions(num_features, args.n_baseline, seed=0)
     base_mean, base_std = summarize("random vs random", pairwise_cosines(base_dirs))
+
+    # Stricter baseline than isotropic random: how close is v_pop to the actual base RM
+    # direction, vs. how close random directions are to it? Two random 4096-dim directions sit
+    # at 0 +/- 0.016 by construction, so that check "can't really fail" (per review comment) --
+    # this one can, since the base RM is a real, non-random direction in the space.
+    head = unit(load_reward_head().reshape(-1))
+    pop_vs_head = [float((v @ head).item()) for v in pop_dirs]
+    rand_vs_head = [float((v @ head).item()) for v in base_dirs]
+    print(f"\ncos(v_pop, base_rm) -- stricter than the isotropic baseline above:")
+    for i, (s, c) in enumerate(zip(args.seeds, pop_vs_head)):
+        print(f"  run {i} ({args.check}={s}): {c:+.4f}")
+    pop_head_mean, pop_head_std = summarize("v_pop vs base_rm", pop_vs_head)
+    rand_head_mean, rand_head_std = summarize("random vs base_rm", rand_vs_head)
 
     print("\n" + "-" * 90)
     print(f"v_pop stability   : {pop_mean:+.4f} (vs random baseline {base_mean:+.4f})")
     print(f"per-user stability: {per_user_means.mean():+.4f} (vs random baseline {base_mean:+.4f})")
+    print(f"v_pop vs base_rm  : {pop_head_mean:+.4f} +/- {pop_head_std:.4f} "
+          f"(vs random-vs-base_rm {rand_head_mean:+.4f} +/- {rand_head_std:.4f})")
     print("Read-out: stability meaningfully above the random baseline (and its std) means the "
           "learned direction(s) are reproducible, not an artifact of this particular run. "
           "Stability indistinguishable from the random baseline means whatever gets "

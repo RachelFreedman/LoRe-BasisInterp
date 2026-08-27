@@ -89,7 +89,7 @@ def main():
                    num_iterations=args.iters, learning_rate=args.lr, verbose=False)
         m.train(tr, val=va)
 
-        wbar = unit((m.V.detach() @ m.wbar.detach()).float())
+        wbar = unit((m.V.detach() @ m.wbar.detach()).float()).cpu()
         # sign is arbitrary in the factorization; orient so it agrees with the pretrained head,
         # otherwise the concept cosines flip sign between seeds for no meaningful reason
         if float(wbar @ head) < 0:

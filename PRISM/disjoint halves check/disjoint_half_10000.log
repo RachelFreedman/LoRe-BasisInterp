@@ -1,0 +1,37 @@
+221906 pairs, 230238 embeddings
+
+[split 0] seed=0  half A: 470 users, half B: 471 users
+[split 0]   half A: train_acc=0.7224 test_acc=0.6806
+[split 0]   half B: train_acc=0.7030 test_acc=0.6722
+[split 0]   cos(v_pop_A, v_pop_B) = +0.2756
+
+[split 1] seed=1  half A: 470 users, half B: 471 users
+[split 1]   half A: train_acc=0.7108 test_acc=0.6730
+[split 1]   half B: train_acc=0.7106 test_acc=0.6769
+[split 1]   cos(v_pop_A, v_pop_B) = +0.3438
+
+[split 2] seed=2  half A: 470 users, half B: 471 users
+[split 2]   half A: train_acc=0.7101 test_acc=0.6674
+[split 2]   half B: train_acc=0.7130 test_acc=0.6718
+[split 2]   cos(v_pop_A, v_pop_B) = +0.3221
+
+[split 3] seed=3  half A: 470 users, half B: 471 users
+[split 3]   half A: train_acc=0.7057 test_acc=0.6749
+[split 3]   half B: train_acc=0.7113 test_acc=0.6748
+[split 3]   cos(v_pop_A, v_pop_B) = +0.4543
+
+[split 4] seed=4  half A: 470 users, half B: 471 users
+[split 4]   half A: train_acc=0.7062 test_acc=0.6726
+[split 4]   half B: train_acc=0.7099 test_acc=0.6737
+[split 4]   cos(v_pop_A, v_pop_B) = +0.4617
+
+##########################################################################################
+# DISJOINT-HALVES SAMPLING-NOISE BASELINE
+##########################################################################################
+  disjoint-half v_pop   : mean=+0.3715  std=0.0740  min=+0.2756  max=+0.4617  (n_pairs=5)
+
+Isotropic random-direction baseline (n=200, for scale reference):
+  random vs random      : mean=-0.0001  std=0.0156  min=-0.0610  max=+0.0631  (n_pairs=19900)
+
+------------------------------------------------------------------------------------------
+disjoint-half v_pop cosine : +0.3715 +/- 0.0740  (n=5)
