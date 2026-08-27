@@ -12,6 +12,17 @@ seeds and across data splits, or do they vary run to run?
                   split). Answers: does the learned direction depend on
                   which held-out pairs happened to get excluded?
 
+IMPORTANT -- rotational ambiguity: LoReV2
+drops the simplex, so V -> VR, w -> R^-1 w leaves the loss unchanged for any
+invertible R. Comparing raw V columns or raw wbar across runs would treat
+this arbitrary rotation as "instability" when the actual reward function is
+identical. This script never compares raw V/wbar/delta directly -- only the
+ROTATION-INVARIANT induced directions:
+    v_pop   = unit(V @ wbar)                    (population direction)
+    v_u     = unit(V @ (wbar + delta_u))         (each user's full direction)
+Both are invariant under V->VR, w->R^-1w (V@wbar = VR @ R^-1wbar), so this
+sidesteps the ambiguity rather than needing to solve it.
+
 
 Baseline: pairwise cosine among N isotropic random unit directions in the
 same 4096-dim space, for a numeric sense of "near 0" in this space. 
