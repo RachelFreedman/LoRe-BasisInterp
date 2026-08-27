@@ -97,44 +97,8 @@ The following functions are central to training and evaluating personalized rewa
 
 ## 🧪 Usage Instructions
 
-Below are instructions for each dataset folder, following a consistent workflow:
-1. **Prepare the dataset** if required.
-2. **Train the reward model basis** using joint learning.
-3. **Evaluate few-shot personalization** with unseen users.
-
-### 🔹 Reddit TLDR
-
-Inside the `RedditTLDR/` directory:
-- `prepare.py`: preprocesses the TLDR dataset
-- `train_basis.py`: trains the shared reward model and user weights
-- `vary_fewshot.py`: evaluates few-shot personalization performance
-
-Example usage:
-```bash
-cd LoRe/RedditTLDR
-python prepare.py          # only needed once
-python train_basis.py
-python vary_fewshot.py
-```
-
----
-
-### 🟣 PersonalLLM
-
-Inside the `PersonalLLM/` directory:
-- `prepare.py`: prepares model response data and user splits
-- `train_basis.py`: learns reward basis across users
-- `vary_fewshot.py`: evaluates few-shot generalization
-
-Example usage:
-```bash
-cd LoRe/PersonalLLM
-python prepare.py          # only needed once
-python train_basis.py
-python vary_fewshot.py
-```
-
----
+Datasets used in this work, each following the same workflow: prepare, train the basis,
+evaluate.
 
 ### 🔸 PRISM
 
@@ -152,11 +116,43 @@ python generate-prism-embeddings.py # only needed once
 python train_basis.py # train the model for a list of ranks, default regularization is specified
 python eval_rb2.py --rm_head "path to saved final layer (V) weights" # evaluate learnt reward basis on RewardBench2 to avoid overfitting to PRISM
 ```
+
 ---
 
-### 🟢 Community Alignment (Coming Soon)
+### 🟢 Community Alignment
 
-Experiments on a much larger community alignment dataset for scalable, multi-user preference learning.
+The second real dataset used in this work. Preparation, embedding and RBD training are in
+`PRISM/`:
+
+```bash
+python PRISM/community_alignment_prep.py --min_pairs 50 --out data/community_alignment/pairs.json
+python PRISM/embed_community_alignment.py
+python PRISM/community_alignment_lore.py --pairs data/community_alignment/pairs.json \
+    --emb data/community_alignment/embeddings.pt
+```
+
+Splits are taken at the level of conversation turns, never individual pairs: each turn yields
+three pairs sharing a prompt and a preferred response, so a pair-level split leaks siblings
+across the boundary.
+
+---
+
+### 🧬 Synthetic control
+
+Personas with known reward directions judging one shared response pool, used to establish
+what the estimator recovers when per-user structure is known to be present. See
+`reports/synthetic_dataset_prereg.md`.
+
+```bash
+python PRISM/build_synthetic_personas.py personas --n_users 60 --max_cos 0.6
+python PRISM/build_synthetic_personas.py generate --n_prompts 60 --workers 4
+modal run modal_embed_pool.py                     # embeds the shared response pool
+python PRISM/build_synthetic_personas.py pairs --pairs_per_user 240 --margin 0.25
+python PRISM/synthetic_persona_lore.py --ranks 1 4 8 16
+```
+
+Splits are taken by whole prompt: every user draws pairs from the same prompt set, so a
+pair-level split would put identical response texts on both sides.
 
 ---
 
@@ -166,6 +162,44 @@ Interpretability analysis of the LoRe v2 shared population direction `v_pop = un
 
 - **PRISM:** writeup [`PRISM/sae_analysis.md`](PRISM/sae_analysis.md); code and results in [`sae/experiments/`](sae/experiments/) (`exp1`–`exp5`, results under `results/exp*/`, saved directions under `artifacts/`).
 - **Community Alignment:** writeup [`PRISM/ca_sae_analysis/ca_sae_analysis.md`](PRISM/ca_sae_analysis/ca_sae_analysis.md); code, results, and reproduction steps in [`PRISM/ca_sae_analysis/`](PRISM/ca_sae_analysis/) (see its `README.md`). The ~512 MB D3 SAE checkpoint is gitignored — download and drop it in locally to run exp3.
+
+---
+
+## Inherited from LoRe
+
+The fork also carries LoRe's original dataset scripts. They are not used in this work, and
+are kept so the upstream pipelines continue to run; both have had the reward-head extraction
+fix applied.
+
+### 🔹 Reddit TLDR
+
+Inside the `RedditTLDR/` directory:
+- `prepare.py`: preprocesses the TLDR dataset
+- `train_basis.py`: trains the shared reward model and user weights
+- `vary_fewshot.py`: evaluates few-shot personalization performance
+
+Example usage:
+```bash
+cd LoRe/RedditTLDR
+python prepare.py          # only needed once
+python train_basis.py
+python vary_fewshot.py
+```
+
+### 🟣 PersonalLLM
+
+Inside the `PersonalLLM/` directory:
+- `prepare.py`: prepares model response data and user splits
+- `train_basis.py`: learns reward basis across users
+- `vary_fewshot.py`: evaluates few-shot generalization
+
+Example usage:
+```bash
+cd LoRe/PersonalLLM
+python prepare.py          # only needed once
+python train_basis.py
+python vary_fewshot.py
+```
 
 ---
 
