@@ -42,9 +42,11 @@ def compute_concept_vectors(input_file, output_file, model_name="Skywork/Skywork
             high_tokenized = tokenizer.apply_chat_template(
                 high_conv, tokenize=True, return_tensors="pt"
             ).to(device)
-            
+            # newer transformers returns a BatchEncoding (has .keys()); older returns a bare tensor
+            high_ids = high_tokenized["input_ids"] if hasattr(high_tokenized, "keys") else high_tokenized
+
             with torch.no_grad():
-                high_out = model(high_tokenized)
+                high_out = model(high_ids)
                 # Ensure it's in float32 for stable difference and mean computations
                 high_emb = high_out.last_hidden_state[0, -1].cpu().to(torch.float32)
                 high_embeddings.append(high_emb)
@@ -54,9 +56,10 @@ def compute_concept_vectors(input_file, output_file, model_name="Skywork/Skywork
             low_tokenized = tokenizer.apply_chat_template(
                 low_conv, tokenize=True, return_tensors="pt"
             ).to(device)
-            
+            low_ids = low_tokenized["input_ids"] if hasattr(low_tokenized, "keys") else low_tokenized
+
             with torch.no_grad():
-                low_out = model(low_tokenized)
+                low_out = model(low_ids)
                 low_emb = low_out.last_hidden_state[0, -1].cpu().to(torch.float32)
                 low_embeddings.append(low_emb)
                 
