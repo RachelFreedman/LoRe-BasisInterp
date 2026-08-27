@@ -1,0 +1,78 @@
+221906 pairs, 230238 embeddings
+
+[run 0] seed=0  (split_seed=0, init_seed=0)  941 users
+[run 0]   train_acc=0.6899  test_acc=0.6791
+
+[run 1] seed=1  (split_seed=0, init_seed=1)  941 users
+[run 1]   train_acc=0.6882  test_acc=0.6801
+
+[run 2] seed=2  (split_seed=0, init_seed=2)  941 users
+[run 2]   train_acc=0.6906  test_acc=0.6802
+
+[run 3] seed=3  (split_seed=0, init_seed=3)  941 users
+[run 3]   train_acc=0.6926  test_acc=0.6796
+
+[run 4] seed=4  (split_seed=0, init_seed=4)  941 users
+[run 4]   train_acc=0.6908  test_acc=0.6797
+
+[run 5] seed=5  (split_seed=0, init_seed=5)  941 users
+[run 5]   train_acc=0.6898  test_acc=0.6802
+
+[run 6] seed=6  (split_seed=0, init_seed=6)  941 users
+[run 6]   train_acc=0.6917  test_acc=0.6786
+
+[run 7] seed=7  (split_seed=0, init_seed=7)  941 users
+[run 7]   train_acc=0.6905  test_acc=0.6806
+
+[run 8] seed=8  (split_seed=0, init_seed=8)  941 users
+[run 8]   train_acc=0.6916  test_acc=0.6788
+
+[run 9] seed=9  (split_seed=0, init_seed=9)  941 users
+[run 9]   train_acc=0.6947  test_acc=0.6795
+
+##########################################################################################
+# STABILITY CHECK: seed  (varying [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+##########################################################################################
+
+Population direction (v_pop = unit(V @ wbar)), pairwise cosine across runs:
+
+v_pop -- full 10x10 pairwise cosine matrix:
+                0        1        2        3        4        5        6        7        8        9
+       0       --   0.7454   0.7743   0.7783   0.7178   0.7440   0.7385   0.6977   0.6783   0.7885
+       1   0.7454       --   0.9108   0.9059   0.8318   0.8607   0.8324   0.7939   0.7567   0.9239
+       2   0.7743   0.9108       --   0.9493   0.8692   0.9103   0.8810   0.8310   0.7832   0.9723
+       3   0.7783   0.9059   0.9493       --   0.8673   0.8987   0.8764   0.8227   0.7798   0.9724
+       4   0.7178   0.8318   0.8692   0.8673       --   0.8158   0.8082   0.7758   0.7412   0.8771
+       5   0.7440   0.8607   0.9103   0.8987   0.8158       --   0.8339   0.7881   0.7553   0.9202
+       6   0.7385   0.8324   0.8810   0.8764   0.8082   0.8339       --   0.8026   0.7491   0.8907
+       7   0.6977   0.7939   0.8310   0.8227   0.7758   0.7881   0.8026       --   0.7301   0.8317
+       8   0.6783   0.7567   0.7832   0.7798   0.7412   0.7553   0.7491   0.7301       --   0.7915
+       9   0.7885   0.9239   0.9723   0.9724   0.8771   0.9202   0.8907   0.8317   0.7915       --
+(Look for block structure -- e.g. some seeds mutually ~0.95 while others are mutually ~0.95 but the TWO GROUPS sit around ~0.7 with each other -- that pattern would mean multiple distinct basins, not uniform noise around one solution.)
+  v_pop                 : mean=+0.8223  std=0.0730  min=+0.6783  max=+0.9724  (n_pairs=45)
+
+Per-run accuracy (cross-reference against the matrix above -- does the outlier run, if any, also have unusual accuracy, or just a different direction?):
+   run |  label |  train_acc |  test_acc
+     0 |      0 |     0.6899 |    0.6791
+     1 |      1 |     0.6882 |    0.6801
+     2 |      2 |     0.6906 |    0.6802
+     3 |      3 |     0.6926 |    0.6796
+     4 |      4 |     0.6908 |    0.6797
+     5 |      5 |     0.6898 |    0.6802
+     6 |      6 |     0.6917 |    0.6786
+     7 |      7 |     0.6905 |    0.6806
+     8 |      8 |     0.6916 |    0.6788
+     9 |      9 |     0.6947 |    0.6795
+  mean |        |     0.6910 |    0.6796
+   std |        |     0.0017 |    0.0006
+
+Per-user directions (v_u = unit(V @ (wbar + delta_u))), pairwise cosine across runs, averaged over users:
+  per-user (avg)        : mean=+0.8222  std=0.0023  min=+0.8134  max=+0.8280  (n_users=941)
+
+Isotropic random-direction baseline (n=200, see docstring caveat):
+  random vs random      : mean=-0.0001  std=0.0156  min=-0.0610  max=+0.0631  (n_pairs=19900)
+
+------------------------------------------------------------------------------------------
+v_pop stability   : +0.8223 (vs random baseline -0.0001)
+per-user stability: +0.8222 (vs random baseline -0.0001)
+Read-out: stability meaningfully above the random baseline (and its std) means the learned direction(s) are reproducible, not an artifact of this particular run. Stability indistinguishable from the random baseline means whatever gets interpreted downstream may just be describing this one run.
