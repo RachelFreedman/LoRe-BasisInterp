@@ -1,6 +1,6 @@
 # What does the learned shared reward direction encode?
 
-Mohamed Eldagla — branch `prism-dataset-analysis`
+Branch `prism-dataset-analysis`
 
 **1. Pre-registration** *(written retroactively — this work predates the workflow. Flagging rather than back-dating.)*
 
@@ -28,4 +28,4 @@ Two earlier versions of this analysis were wrong and are superseded. I first com
 
 **5. What would prove it wrong**
 
-The library is 11 concepts, PRISM-derived and LLM-generated. "Not aligned with these" is not "uninterpretable" — the relevant axis may simply be absent. Those concepts are also highly correlated with one another, so eleven readings near the 84th percentile are not eleven independent tests and should not be pooled as though they were. This is one dataset, one rank, one hyperparameter setting. And the direction comes from my LoReV2; Rachel's mLoRe reference implementation may produce a different one, which would invalidate the specific numbers even if the methodological point holds.
+The library is 11 concepts, PRISM-derived and LLM-generated. "Not aligned with these" is not "uninterpretable" — the relevant axis may simply be absent. Those concepts are also highly correlated with one another, so eleven readings near the 84th percentile are not eleven independent tests and should not be pooled as though they were. This is one dataset, one rank, one hyperparameter setting. And the direction comes from this LoReV2 implementation; a separate reference implementation may produce a different one, which would invalidate the specific numbers even if the methodological point holds.

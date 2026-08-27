@@ -1,7 +1,7 @@
 """
 Is there any *learnable per-user* preference signal in PRISM, above a global reward direction?
 
-This is the upstream question Ifesi's alpha sweep implies but doesn't directly test: LoRe never beats
+This is the upstream question the alpha sweep implies but doesn't directly test: LoRe never beats
 the base RM (~0.59) at any alpha/rank, and with alpha=0 the free bases OVERFIT (train 0.999 / test
 0.570) instead of generalizing. That strongly suggests there is no generalizable per-user structure.
 This script tests that head-on, per user, on held-out prompts.

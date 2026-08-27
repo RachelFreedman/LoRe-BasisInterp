@@ -1,8 +1,8 @@
 # Red-team: LoReV2 — Community Alignment (Part 1) + MultiPref (Part 2)
 
-Ifesi — branch `prism-dataset-analysis`
+Red-team review — branch `prism-dataset-analysis`
 
-**Target claim (Mohamed's).** LoReV2 beats the base Skywork RM by ~+0.03, and that gain is a single shared population direction (`wbar`) — the per-user personalization deltas add nothing. "Individuals don't matter much here." Part 1 challenges this within Community Alignment; Part 2 re-tests it on an independent dataset (MultiPref) and inspects the learned matrix directly.
+**Target claim (under review).** LoReV2 beats the base Skywork RM by ~+0.03, and that gain is a single shared population direction (`wbar`) — the per-user personalization deltas add nothing. "Individuals don't matter much here." Part 1 challenges this within Community Alignment; Part 2 re-tests it on an independent dataset (MultiPref) and inspects the learned matrix directly.
 
 # Part 1 — Community Alignment
 

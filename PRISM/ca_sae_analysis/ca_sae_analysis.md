@@ -1,10 +1,10 @@
 # SAE Interpretability Check: LoRe v2 Shared Population Direction (Community Alignment)
 
-Owner: Ifesi   Red-teamers: Prerana, Mohamed
+Owner and red-teamers: anonymized for review
 
 Where the work lives: folder `PRISM/ca_sae_analysis/` (self-contained: code, artifacts, results, summaries). Run locally on the reviewer-supplied CA embeddings; not yet committed. The v2 basis analysed here is not refit by these scripts — it is loaded from `results/community_alignment/ca_v_pop.pt`, key `CA_K10_seed42_lam.01_.01`, fit upstream by `PRISM/community_alignment_lore.py --model v2 --save_model`. The per-experiment file map is in Section 3.
 
-This is the Community Alignment (CA) companion to the PRISM check. Same question, same five experiments, same primitives (imported from `sae/experiments/common.py`, so the sign-flip fix is inherited). The one reason CA matters on its own: synthetic_recovery found LoRe needs ~50+ pairs/user before it can recover a planted axis. PRISM sits below that (~15 pairs/user); CA sits well above it (~180). CA is the stronger test, and it is the dataset the paper's accuracy numbers are actually on — so if the PRISM story survives here, it is describing the object the results section describes, not a low-data artifact. **[This doc directly answers Mohamed's PRISM-review scope point — see Section 6.]**
+This is the Community Alignment (CA) companion to the PRISM check. Same question, same five experiments, same primitives (imported from `sae/experiments/common.py`, so the sign-flip fix is inherited). The one reason CA matters on its own: synthetic_recovery found LoRe needs ~50+ pairs/user before it can recover a planted axis. PRISM sits below that (~15 pairs/user); CA sits well above it (~180). CA is the stronger test, and it is the dataset the paper's accuracy numbers are actually on — so if the PRISM story survives here, it is describing the object the results section describes, not a low-data artifact. **[This doc directly answers the open scope point from the PRISM review — see Section 6.]**
 
 ## 1. Pre-registration
 
@@ -112,18 +112,18 @@ The exp1 null presents differently than on PRISM: ||wbar|| does not collapse (0.
 
 exp5 recovery is only partial (cos 0.29) at the CA fit's own lr; it takes the standard v2 lr to reach cos 0.80. The positive control still passes (off-head both times), but the low-lr number should be reported with the convergence caveat, not as a clean recovery.
 
-Only one basis was fit (K=10, seed=42, lam_pop=lam_d=0.01). No sweep over K, seed, or ridge strengths. Note the paper's tuned CA config is lam_pop=0.01, lam_d=10 (a second config, `CA_K8_seed42_tuned`, is present in ca_v_pop.pt but not analysed here); Mohamed reports cos(v_pop, head) moves between 0.035 and 0.055 across the two configs, so the exact cosine is config-dependent even though the qualitative finding holds.
+Only one basis was fit (K=10, seed=42, lam_pop=lam_d=0.01). No sweep over K, seed, or ridge strengths. Note the paper's tuned CA config is lam_pop=0.01, lam_d=10 (a second config, `CA_K8_seed42_tuned`, is present in ca_v_pop.pt but not analysed here); the PRISM review reports cos(v_pop, head) moves between 0.035 and 0.055 across the two configs, so the exact cosine is config-dependent even though the qualitative finding holds.
 
-## 6. Relation to the PRISM review (Mohamed)
+## 6. Relation to the PRISM review
 
-This doc closes the one open scope point from the PRISM review. Mohamed pulled the PRISM basis and scored it on CA:
+This doc closes the one open scope point from the PRISM review, in which the PRISM basis was pulled and scored on CA:
 
   - cos(CA v_pop, PRISM v_pop) = 0.078; score correlation on CA pair diffs = 0.713.
   - On CA held-out pairs he measured: CA v_pop 0.6754, head 0.6463, PRISM v_pop 0.6219.
 
 His point: the PRISM-fit v_pop scores below CA's base RM on CA pairs, while the CA-fit direction beats it — "the direction wins on the data it was fit on and loses elsewhere… either interpret the CA direction or say plainly that this is PRISM-specific." This analysis interprets the CA direction directly. The CA-fit v_pop beats CA's base RM (0.6797 vs 0.6364 here; 0.6754 vs 0.6463 in his independent scoring — same ordering), and shows the same interpretability profile as on PRISM: near-orthogonal to the head, off the concept library, residual ≈ v_pop. So the finding is not PRISM-specific; it holds for the direction fit on, and evaluated on, the paper's own dataset.
 
-A formal CA red-team pass (Prerana/Mohamed) is still pending.
+A formal CA red-team pass is still pending.
 
 ---
 

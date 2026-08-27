@@ -1,6 +1,6 @@
 # SAE interpretability check: LoRe v2 shared population direction
 
-Branch `sae-jumprelu`, commit `f546252` (repo RachelFreedman/LoRe-BasisInterp). PRISM only — no Community Alignment or MultiPref data is used anywhere in this analysis.
+Branch `sae-jumprelu`, commit `f546252`. PRISM only — no Community Alignment or MultiPref data is used anywhere in this analysis.
 
 ## What was tested
 
@@ -62,7 +62,7 @@ Scripts sit at the top of `sae/experiments/`; shared primitives are in `sae/expe
 Basis fit: `PRISM/fit_v2_basis.py` → `PRISM/basis_v2.pt`.
 
 Every headline number above comes from these committed JSONs. Pinned example:
-`https://github.com/RachelFreedman/LoRe-BasisInterp/blob/f546252/sae/experiments/results/exp2/summary.json`
+`sae/experiments/results/exp2/summary.json` at commit `f546252`
 
 ## How to reproduce
 

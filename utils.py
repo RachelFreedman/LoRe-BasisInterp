@@ -711,7 +711,7 @@ def run_few_shot_vary_shots(trials, alpha_list, K_list, num_shots, train_feature
 # LoRe v2 -- redesigned parameterization.
 #
 # Everything below is ADDITIVE. LoRe_regularized above is the vanilla baseline that every
-# result in CONTRIBUTIONS.md came from; it is deliberately left untouched so the two can be
+# result in the contribution log came from; it is deliberately left untouched so the two can be
 # run head-to-head.
 #
 # Changes vs vanilla:

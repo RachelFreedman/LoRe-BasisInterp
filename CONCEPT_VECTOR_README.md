@@ -2,7 +2,7 @@
 
 An automated evaluation pipeline for measuring whether [LoRe](https://arxiv.org/abs/2504.14439)'s learned low-rank reward model bases naturally align with human-interpretable concepts.
 
-This work builds on top of the [LoRe-BasisInterp](https://github.com/RachelFreedman/LoRe-BasisInterp) codebase by Meta FAIR.
+This work builds on top of the LoRe-BasisInterp codebase by Meta FAIR.
 
 ---
 

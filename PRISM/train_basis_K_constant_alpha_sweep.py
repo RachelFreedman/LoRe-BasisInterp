@@ -61,7 +61,7 @@ os.makedirs(ARTIFACT_DIR, exist_ok=True)
 utils.SAVE_DIR = ARTIFACT_DIR
 utils.SAVE_TAG = "K1sweep_"
 
-# --- Rachel's disentangling experiment: fix K=1, sweep the effective regularization ---
+# --- Disentangling experiment: fix K=1, sweep the effective regularization ---
 # Original script: swept K with a FIXED alpha=1e4, so effective reg = alpha/K fell as K rose.
 # Here: FIX K=1 and set alpha = 1e4/g for each g. At K=1 the effective reg is alpha/K = alpha
 # = 1e4/g, which equals the ORIGINAL K=g run's effective reg (1e4/g). So the K=1 run at a given
