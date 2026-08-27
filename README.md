@@ -56,6 +56,16 @@ The following functions are central to training and evaluating personalized rewa
 - `LoRe(...)`: Class modeling shared reward model `V` (linear transformation on fixed embeddings) and user-specific weights `W`
 - `LoRe_regularized(...)`: Class modeling shared reward model `V` (linear transformation on fixed embeddings), cosine similarity regularization to base model, and user-specific weights `W`
 - `PersonalizeBatch(...)`: Class to model weights for new users
+- `LoReV2(...)`: Class modeling a shared basis `V` with unconstrained (signed) user weights factored as a population term plus a per-user deviation, `w_u = wbar + delta_u`, regularized by a ridge penalty in reward-function space rather than a cosine anchor to a reference direction
+- `PersonalizeDelta(...)`: Class to model weights for new users under `LoReV2`, freezing `V` and `wbar` and learning only `delta_u`
+- `solve_lore_v2(...)`: Convenience wrapper that fits `LoReV2` and returns the learned basis and weights
+- `canonical_variation_axes(...)`: Recovers identifiable axes from a fitted `LoReV2` model by SVD of the centred per-user reward deviations, followed by a varimax rotation
+
+> **A note on naming.** The class is called `LoReV2` in the source for historical
+> reasons. It is the estimator referred to as **RBD (Reward Basis Decomposition)**
+> in the accompanying paper; the two names denote the same model. The source name
+> is retained so that existing scripts, checkpoints and result files continue to
+> resolve.
 
 ## Training and Evaluation
 - `run(...)`: Runs the entire pipeline with 1. Learning the basis rewards, 2. Evaluation on seen users, 3. Fewshot learning on new users, 4. Evaluation on new users. The input K_list can be modified to specify the number of basis. 0 is the reference model, and 1 is the BT model.
