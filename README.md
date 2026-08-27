@@ -1,20 +1,41 @@
-# LoRe: Personalizing LLMs via Low-Rank Reward Modeling
+# Reward Basis Decomposition (RBD)
 
-**[LoRe](https://arxiv.org/abs/2504.14439)** is a lightweight, modular codebase for **learning personalized reward models** from preference data in multi-user environments. It supports both joint reward learning and few-shot personalization, and is built with extensibility in mind.
+**RBD** is a method for isolating and interpreting the preference structure a multi-user
+reward model has learned. It fits a basis shared across users and reads two objects off the
+fit: a single **population direction**, describing what users agree on, and one **user
+direction** per user, describing how that user departs from it. Both are vectors in the
+reward model's embedding space, so shared and individual preference structure can be
+examined separately, and the analysis applies to a handful of directions rather than to a
+whole network.
 
-LoRe currently supports experiments on three benchmark datasets:
-- **Reddit TLDR**: headline preference modeling
-- **PRISM**: multi-turn dialogue response preferences
-- **PersonalLLM**: user-personalized reward modeling for open-ended language model responses
+This repository is a fork of the reference implementation of
+**[LoRe](https://arxiv.org/abs/2504.14439)** (Bose et al., 2025). RBD is built on that
+family of methods, and LoRe serves as the baseline throughout. LoRe's own documentation is
+retained below, and its usage instructions still apply.
 
 ---
 
-## 🚀 Features
+## What this fork adds
 
-- Low-rank reward model learning across users
-- Few-shot personalization with new users
-- Evaluation on seen/unseen users and prompts
-- Modular dataset and optimizer configuration
+- **The RBD estimator** — signed user weights factored as a population term plus a per-user
+  deviation, `w_u = wbar + delta_u`; a ridge penalty in reward-function space in place of a
+  cosine anchor to a reference direction; no basis-column dropping; joint optimisation with
+  early stopping on a validation split. Implemented as `LoReV2` in `utils.py` alongside the
+  untouched LoRe classes, so the two run head to head.
+- **Identifiable axes** — signed weights leave the raw basis columns unidentified, so
+  `canonical_variation_axes(...)` recovers interpretable axes from a fit by SVD of the
+  centred per-user reward deviations followed by a varimax rotation.
+- **A synthetic control with planted personalization** — personas with known reward
+  directions judging one shared response pool, so the recovery target is known in closed
+  form. This establishes what the estimator finds when per-user structure is known to be
+  present, which is what makes a null result on real data interpretable.
+- **Interpretability analyses** — alignment of the recovered directions against a named
+  concept library, and decomposition over sparse-autoencoder features.
+- **Corrections to the released code** — the reward-head extraction, and a preprocessing
+  artifact that formatted the two sides of a preference pair differently.
+
+Datasets: PRISM, Community Alignment, and the synthetic control, alongside LoRe's original
+Reddit TLDR and PersonalLLM support.
 
 ---
 
