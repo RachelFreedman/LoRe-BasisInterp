@@ -1,21 +1,21 @@
 {
   "dataset": "community_alignment",
-  "config": "CA_K10_seed42_lam.01_.01",
+  "config": "CA_K8_seed42_tuned",
   "n_train_pairs": 27036,
   "n_test_pairs": 9010,
   "mean_train_diff_norm": 28.875734329223633,
   "cos_u_train_head": 0.45089709758758545,
-  "cos_u_train_vpop": 0.03945288434624672,
+  "cos_u_train_vpop": 0.0524243488907814,
   "cos_u_train_u_test": 0.998649537563324,
   "cos_u_test_head": 0.4499673843383789,
   "cos_best_single_head": 0.03712517395615578,
-  "cos_best_single_vpop": 0.14169593155384064,
+  "cos_best_single_vpop": 0.39273661375045776,
   "held_out_accuracy": {
     "u_data_train_on_test": 0.6378468368479467,
     "u_data_test_insample": 0.6381798002219756,
     "best_single_dir_on_test": 0.6493895671476138,
     "head_on_test": 0.6364039955604883,
-    "v_pop_on_test": 0.6796892341842398
+    "v_pop_on_test": 0.7049944506104329
   },
   "held_out_accuracy_full": {
     "u_data_train_on_test": {
@@ -43,8 +43,8 @@
       "n_pairs": 9010
     },
     "v_pop_on_test": {
-      "overall_pair_acc": 0.6796892341842398,
-      "per_user_mean_acc": 0.6859265431761742,
+      "overall_pair_acc": 0.7049944506104329,
+      "per_user_mean_acc": 0.7104872484505177,
       "n_users": 200,
       "n_pairs": 9010
     }

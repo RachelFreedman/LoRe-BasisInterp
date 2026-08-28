@@ -31,8 +31,8 @@ for _p in (REPO_ROOT, os.path.join(REPO_ROOT, "PRISM")):
     if _p not in sys.path:
         sys.path.append(_p)
 
-DEFAULT_BASIS = os.path.join(REPO_ROOT, "PRISM", "basis_v2.pt")
-DEFAULT_RUN_KEY = "PART2_K10_seed42_v2"
+DEFAULT_BASIS = os.environ.get("SAE_BASIS_PATH") or os.path.join(REPO_ROOT, "PRISM", "basis_v2.pt")
+DEFAULT_RUN_KEY = os.environ.get("SAE_RUN_KEY", "PART2_K10_seed42_v2")
 DEFAULT_CONCEPTS = os.path.join(REPO_ROOT, "data", "prism", "concept_vectors.pt")
 DEFAULT_TRAIN_EMB = os.path.join(REPO_ROOT, "PRISM", "data", "prism", "train_embeddings.pkl")
 DEFAULT_TEST_EMB = os.path.join(REPO_ROOT, "PRISM", "data", "prism", "test_embeddings.pkl")

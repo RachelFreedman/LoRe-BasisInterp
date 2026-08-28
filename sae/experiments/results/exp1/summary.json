@@ -1,25 +1,25 @@
 {
-  "significance_threshold": 0.03179526329040527,
+  "significance_threshold": 0.031795259565114975,
   "lam_pop": 0.01,
-  "lam_d": 0.01,
-  "cos_real_vpop_head": 0.009698859415948391,
-  "cos_shuffled_head": 0.057620301842689514,
-  "cos_shuffled_real": -0.04431763291358948,
+  "lam_d": 10.0,
+  "cos_real_vpop_head": 0.01184595562517643,
+  "cos_shuffled_head": 0.004882721230387688,
+  "cos_shuffled_real": 0.004102661274373531,
   "head": {
     "name": "head",
     "n_significant_concepts": 11,
     "significant_concepts": {
-      "helpfulness": 0.49337515234947205,
-      "factuality": 0.45753544569015503,
-      "values": 0.4446141719818115,
-      "safety": 0.423446387052536,
-      "diversity": 0.4090418815612793,
-      "sycophancy": -0.40096601843833923,
-      "repetition": -0.3932602107524872,
-      "creativity": -0.3829639256000519,
-      "formatting": 0.36237215995788574,
-      "confidence": 0.25214099884033203,
-      "fluency": -0.040832579135894775
+      "helpfulness": 0.49337491393089294,
+      "factuality": 0.457535058259964,
+      "values": 0.4446139633655548,
+      "safety": 0.42344608902931213,
+      "diversity": 0.40904152393341064,
+      "sycophancy": -0.4009658098220825,
+      "repetition": -0.39326006174087524,
+      "creativity": -0.38296371698379517,
+      "formatting": 0.36237192153930664,
+      "confidence": 0.2521408796310425,
+      "fluency": -0.04083254933357239
     },
     "held_out_accuracy": {
       "overall_pair_acc": 0.5901993144598198,
@@ -27,46 +27,36 @@
       "n_users": 1029,
       "n_pairs": 15754
     },
-    "cos_to_head": 1.0000009536743164,
-    "cos_to_real_vpop": 0.009698859415948391
+    "cos_to_head": 1.000002145767212,
+    "cos_to_real_vpop": 0.01184595562517643
   },
   "real_vpop": {
     "name": "real_vpop",
-    "n_significant_concepts": 4,
+    "n_significant_concepts": 2,
     "significant_concepts": {
-      "fluency": 0.07438957691192627,
-      "confidence": 0.0545601025223732,
-      "helpfulness": 0.04695744812488556,
-      "diversity": 0.046293534338474274
+      "fluency": 0.04344077408313751,
+      "confidence": 0.03543543070554733
     },
     "held_out_accuracy": {
-      "overall_pair_acc": 0.6285387838009394,
-      "per_user_mean_acc": 0.6318140898345164,
+      "overall_pair_acc": 0.6327281960137108,
+      "per_user_mean_acc": 0.6351876872418805,
       "n_users": 1029,
       "n_pairs": 15754
     },
-    "cos_to_head": 0.009698859415948391,
-    "cos_to_real_vpop": 0.9999996423721313
+    "cos_to_head": 0.01184595562517643,
+    "cos_to_real_vpop": 1.0000003576278687
   },
   "shuffled_vpop": {
     "name": "shuffled_vpop",
-    "n_significant_concepts": 7,
-    "significant_concepts": {
-      "safety": -0.08297428488731384,
-      "formatting": 0.06697175651788712,
-      "fluency": -0.05817495658993721,
-      "values": -0.05593978613615036,
-      "diversity": -0.04620014876127243,
-      "helpfulness": 0.03672830015420914,
-      "repetition": -0.035267479717731476
-    },
+    "n_significant_concepts": 0,
+    "significant_concepts": {},
     "held_out_accuracy": {
-      "overall_pair_acc": 0.4593119207820236,
-      "per_user_mean_acc": 0.45978443016116194,
+      "overall_pair_acc": 0.5055858829503618,
+      "per_user_mean_acc": 0.5075665853403516,
       "n_users": 1029,
       "n_pairs": 15754
     },
-    "cos_to_head": 0.057620301842689514,
-    "cos_to_real_vpop": -0.04431763291358948
+    "cos_to_head": 0.004882721230387688,
+    "cos_to_real_vpop": 0.004102661274373531
   }
 }

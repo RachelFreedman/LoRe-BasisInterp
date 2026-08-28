@@ -3,17 +3,17 @@
   "n_test_pairs": 15754,
   "mean_train_diff_norm": 23.7793025970459,
   "cos_u_train_head": 0.4283207356929779,
-  "cos_u_train_vpop": 0.1178867369890213,
+  "cos_u_train_vpop": 0.0814623087644577,
   "cos_u_train_u_test": 0.9962006211280823,
   "cos_u_test_head": 0.43800151348114014,
   "cos_best_single_head": -0.00413292134180665,
-  "cos_best_single_vpop": 0.08906881511211395,
+  "cos_best_single_vpop": 0.19865195453166962,
   "held_out_accuracy": {
     "u_data_train_on_test": 0.590897549828615,
     "u_data_test_insample": 0.5914688333121747,
     "best_single_dir_on_test": 0.576044179256062,
     "head_on_test": 0.5901993144598198,
-    "v_pop_on_test": 0.6285387838009394
+    "v_pop_on_test": 0.6327281960137108
   },
   "held_out_accuracy_full": {
     "u_data_train_on_test": {
@@ -41,8 +41,8 @@
       "n_pairs": 15754
     },
     "v_pop_on_test": {
-      "overall_pair_acc": 0.6285387838009394,
-      "per_user_mean_acc": 0.6318140898345164,
+      "overall_pair_acc": 0.6327281960137108,
+      "per_user_mean_acc": 0.6351876872418805,
       "n_users": 1029,
       "n_pairs": 15754
     }
