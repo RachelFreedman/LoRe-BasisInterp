@@ -1,17 +1,17 @@
 {
   "dataset": "community_alignment",
-  "config": "CA_K10_seed42_lam.01_.01",
+  "config": "CA_K8_seed42_tuned",
   "significance_threshold": 0.031795259565114975,
   "lam_pop": 0.01,
-  "lam_d": 0.01,
+  "lam_d": 10.0,
   "iters": 5000,
   "lr": 0.0001,
   "seed": 42,
-  "wbar_norm_real": 0.908210039138794,
-  "wbar_norm_shuffled": 0.752368688583374,
-  "cos_real_vpop_head": 0.03502548858523369,
-  "cos_shuffled_head": 0.004271472338587046,
-  "cos_shuffled_real": -0.012471966445446014,
+  "wbar_norm_real": 1.1357184648513794,
+  "wbar_norm_shuffled": 1.1241676807403564,
+  "cos_real_vpop_head": 0.05479937419295311,
+  "cos_shuffled_head": 0.004332707263529301,
+  "cos_shuffled_real": -0.010850651189684868,
   "head": {
     "name": "head",
     "n_significant_concepts": 11,
@@ -35,37 +35,37 @@
       "n_pairs": 9010
     },
     "cos_to_head": 1.000002145767212,
-    "cos_to_real_vpop": 0.03502548858523369
+    "cos_to_real_vpop": 0.05479937419295311
   },
   "real_vpop": {
     "name": "real_vpop",
     "n_significant_concepts": 4,
     "significant_concepts": {
-      "confidence": 0.04704863578081131,
-      "fluency": 0.0457964688539505,
-      "diversity": 0.03810922056436539,
-      "helpfulness": 0.03732603043317795
+      "confidence": 0.05589452385902405,
+      "fluency": 0.051603663712739944,
+      "helpfulness": 0.04502994194626808,
+      "diversity": 0.043022871017456055
     },
     "held_out_accuracy": {
-      "overall_pair_acc": 0.6796892341842398,
-      "per_user_mean_acc": 0.6859265431761742,
+      "overall_pair_acc": 0.7049944506104329,
+      "per_user_mean_acc": 0.7104872484505177,
       "n_users": 200,
       "n_pairs": 9010
     },
-    "cos_to_head": 0.03502548858523369,
-    "cos_to_real_vpop": 1.0
+    "cos_to_head": 0.05479937419295311,
+    "cos_to_real_vpop": 0.9999996423721313
   },
   "shuffled_vpop": {
     "name": "shuffled_vpop",
     "n_significant_concepts": 0,
     "significant_concepts": {},
     "held_out_accuracy": {
-      "overall_pair_acc": 0.4891231964483907,
-      "per_user_mean_acc": 0.48614448852837083,
+      "overall_pair_acc": 0.4984461709211987,
+      "per_user_mean_acc": 0.49454985521733763,
       "n_users": 200,
       "n_pairs": 9010
     },
-    "cos_to_head": 0.004271472338587046,
-    "cos_to_real_vpop": -0.012471966445446014
+    "cos_to_head": 0.004332707263529301,
+    "cos_to_real_vpop": -0.010850651189684868
   }
 }

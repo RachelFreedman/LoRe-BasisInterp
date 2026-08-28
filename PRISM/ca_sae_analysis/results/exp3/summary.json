@@ -4,20 +4,20 @@
   "top_n": 50,
   "community_alignment": {
     "top_n": 50,
-    "cos_vpop_head": 0.03502548858523369,
+    "cos_vpop_head": 0.05479937419295311,
     "overlaps": {
-      "jaccard_vpop_head": 0.010101010101010102,
-      "jaccard_residual_head": 0.010101010101010102,
-      "jaccard_residual_vpop": 0.9607843137254902
+      "jaccard_vpop_head": 0.02040816326530612,
+      "jaccard_residual_head": 0.02040816326530612,
+      "jaccard_residual_vpop": 0.7543859649122807
     }
   },
   "prism": {
     "top_n": 50,
-    "cos_vpop_head": 0.00969887524843216,
+    "cos_vpop_head": 0.01184595562517643,
     "overlaps": {
-      "jaccard_vpop_head": 0.041666666666666664,
-      "jaccard_residual_head": 0.041666666666666664,
-      "jaccard_residual_vpop": 0.9607843137254902
+      "jaccard_vpop_head": 0.010101010101010102,
+      "jaccard_residual_head": 0.010101010101010102,
+      "jaccard_residual_vpop": 1.0
     }
   }
 }

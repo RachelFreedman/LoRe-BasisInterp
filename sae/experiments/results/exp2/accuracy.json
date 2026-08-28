@@ -6,14 +6,14 @@
     "n_pairs": 15754
   },
   "v_pop": {
-    "overall_pair_acc": 0.6285387838009394,
-    "per_user_mean_acc": 0.6318140898345164,
+    "overall_pair_acc": 0.6327281960137108,
+    "per_user_mean_acc": 0.6351876872418805,
     "n_users": 1029,
     "n_pairs": 15754
   },
   "residual": {
-    "overall_pair_acc": 0.626126697981465,
-    "per_user_mean_acc": 0.6294333200441968,
+    "overall_pair_acc": 0.6293004951123524,
+    "per_user_mean_acc": 0.6317273153913496,
     "n_users": 1029,
     "n_pairs": 15754
   }

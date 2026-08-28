@@ -1,0 +1,18 @@
+{
+  "ca_config": "CA_K8_seed42_tuned",
+  "prism_key": "PART2_K8_seed42_tuned",
+  "n_pairs": 9010,
+  "n_users": 200,
+  "acc_ca_vpop": 0.7049944506104329,
+  "acc_base_head": 0.6364039955604883,
+  "acc_prism_vpop_transfer": 0.5984461709211987,
+  "cos_ca_vpop_prism_vpop": 0.032556988298892975,
+  "score_corr_ca_prism_vpop": 0.6104122996330261,
+  "sanity": {
+    "exp2_acc_ca_vpop": 0.7049944506104329,
+    "exp2_acc_head": 0.6364039955604883,
+    "delta_ca_vpop": 0.0,
+    "delta_head": 0.0,
+    "passed": true
+  }
+}
