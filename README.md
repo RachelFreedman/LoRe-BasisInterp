@@ -1,12 +1,27 @@
 # Reward Basis Decomposition (RBD)
 
-**RBD** is a method for isolating and interpreting the preference structure a multi-user
-reward model has learned. It fits a basis shared across users and reads two objects off the
-fit: a single **population direction**, describing what users agree on, and one **user
-direction** per user, describing how that user departs from it. Both are vectors in the
-reward model's embedding space, so shared and individual preference structure can be
-examined separately, and the analysis applies to a handful of directions rather than to a
-whole network.
+A reward model defines what a policy is optimized toward, so understanding what it encodes
+matters for alignment. Existing interpretability techniques read a reward model through its
+single reward head, which cannot separate what a population shares from what an individual
+contributes.
+
+**RBD** is a method for isolating and interpreting that structure. It fits a low-rank
+decomposition to a frozen reward model's embeddings and splits per-user weights into a
+population term and a per-user term, yielding a single **population direction**, describing
+what users agree on, and one **user direction** per user, describing how that user departs
+from it. Both are vectors in the reward model's embedding space, so shared and individual
+structure can be examined separately, and the analysis applies to a handful of directions
+rather than to a whole network.
+
+## What we found
+
+RBD recovers planted per-user directions on a synthetic control where that structure exists
+by construction. On PRISM and Community Alignment it does not: interpreting the recovered
+directions through concept alignment and sparse-autoencoder decomposition finds no
+individual user structure in either dataset, with a single population direction accounting
+for the model's held-out accuracy. The synthetic control is what licenses that reading — it
+establishes that the estimator finds per-user structure when the structure is there, so a
+null on the real datasets is a statement about the data rather than about the method.
 
 This repository is a fork of the reference implementation of
 **[LoRe](https://arxiv.org/abs/2504.14439)** (Bose et al., 2025). RBD is built on that
@@ -27,8 +42,7 @@ retained below, and its usage instructions still apply.
   centred per-user reward deviations followed by a varimax rotation.
 - **A synthetic control with planted personalization** — personas with known reward
   directions judging one shared response pool, so the recovery target is known in closed
-  form. This establishes what the estimator finds when per-user structure is known to be
-  present, which is what makes a null result on real data interpretable.
+  form.
 - **Interpretability analyses** — alignment of the recovered directions against a named
   concept library, and decomposition over sparse-autoencoder features.
 - **Corrections to the released code** — the reward-head extraction, and a preprocessing
