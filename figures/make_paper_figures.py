@@ -1,11 +1,8 @@
-"""Figures for the RBD paper, in the style of a published ML paper.
+"""Figures for the RBD paper.
 
 Built on scienceplots' `science` style (inward ticks, minor ticks, no grid, hairline
 spines), with Paul Tol's high-contrast qualitative pair (#004488 / #BB5566), which is
 colourblind-safe and stays legible in greyscale print.
-
-Deliberately plain: no callout arrows, no floating explanatory text, no title-case
-panel headers. Anything a reader needs in prose belongs in the caption.
 
 Numbers are transcribed from the tables in main.tex and from
 PRISM/stability_*.log; nothing is recomputed here.
@@ -13,6 +10,7 @@ PRISM/stability_*.log; nothing is recomputed here.
   fig_rank_panels  tab:ca-headline + tab:synth-rank
   fig_concepts     tab:concepts, against the random-direction null
   fig_stability    the pairwise cosine matrices behind tab:stability
+  fig_identification  tab:synth-ident, user-to-axis match against separation
 """
 import matplotlib
 matplotlib.use("Agg")
@@ -104,8 +102,8 @@ for ax, series, xlim, lab in [
     ax.set_xlim(*xlim); ax.set_ylim(-0.7, len(cname) - 0.3)
     ax.set_xlabel("cosine with concept vector")
     panel_label(ax, lab)
-# A shaded band marking (a)'s range was tried here and competed with the null band,
-# which is the same grey. The scale change is called out in the panel label instead.
+# (b) spans 6.5x the range of (a) under the same axis label, so the change of scale
+# is stated in the panel title.
 axes[0].set_yticks(y); axes[0].set_yticklabels(cname)
 axes[0].tick_params(axis="y", length=0)
 fig.legend(handles=[Line2D([], [], color=BLUE, marker="o", ms=3.2, ls="none", label=r"$\bar{w}$"),
@@ -165,13 +163,12 @@ for ax, (M, title, mean, factor) in zip(axes, panels):
                    aspect="auto")
     ax.set_title(f"{title.replace('{,}', ',')}\nmean {mean:.4f}", fontsize=7,
                  pad=3, linespacing=1.35)
-    # Run indices were set at 5.5pt, below the print floor, and nothing in the text
-    # refers to an individual cell -- the matrix shape already reads at a glance.
+    # No tick labels: at this size they fall below the print floor, and nothing in
+    # the text refers to an individual cell.
     ax.set_xticks([]); ax.set_yticks([])
     ax.minorticks_off()                      # the science style adds minor ticks
     ax.tick_params(length=0)
-    # name what actually differs between runs: (a) and (b) vary the seed, (c) the
-    # train/test split. "run" alone leaves the reader guessing which.
+    # (a) and (b) vary the seed; (c) varies the train/test split.
     ax.set_xlabel(factor, fontsize=7, labelpad=2)
     ax.set_ylabel(factor, fontsize=7, labelpad=2)
     for sp in ax.spines.values():
@@ -189,12 +186,9 @@ print("wrote fig_rank_panels, fig_concepts, fig_stability")
 
 
 # ------------------------------------------------------------------ identification
-# tab:synth-ident. Two accuracy requirements drive the design:
-#   1. x is the measured separation itself, on a true numeric scale. The three conditions
-#      are unequally spaced (0.599, 0.446, 0.349), so plotting them at equal intervals
-#      would distort the shape of both curves -- and the shape is the claim.
-#   2. chance is 1/N and N differs per condition (51, 22, 11), so it is drawn as its own
-#      series. It is fixed by the design, not measured, so it gets markers and no line.
+# tab:synth-ident. x is the measured separation on a true numeric scale: the three
+# conditions are unequally spaced (0.599, 0.446, 0.349). chance is 1/N and N differs per
+# condition (51, 22, 11), so it is drawn per point, with markers and no connecting line.
 sep    = [0.599, 0.446, 0.349]
 nuser  = [51, 22, 11]
 chance = [1/51, 1/22, 1/11]
