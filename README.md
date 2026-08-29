@@ -140,8 +140,7 @@ across the boundary.
 ### 🧬 Synthetic control
 
 Personas with known reward directions judging one shared response pool, used to establish
-what the estimator recovers when per-user structure is known to be present. See
-`reports/synthetic_dataset_prereg.md`.
+what the estimator recovers when per-user structure is known to be present.
 
 ```bash
 python PRISM/build_synthetic_personas.py personas --n_users 60 --max_cos 0.6
