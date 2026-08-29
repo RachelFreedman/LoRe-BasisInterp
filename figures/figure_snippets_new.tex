@@ -38,3 +38,17 @@
   Table~\ref{tab:stability}.}
   \label{fig:stability}
 \end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.62\linewidth]{figures/fig_identification.png}
+  \caption{User-to-axis match against planted separation, four seeds per point. Separation
+  is held fixed within each condition, so the difference between estimators cannot be
+  explained by how distinguishable the users are. LoRe rises monotonically as the planted
+  users become more separated; RBD is highest at intermediate separation, though the spread
+  at eleven users ($\pm 0.207$) does not resolve a decline. Chance is $1/N$ and rises as the
+  user count falls, so it is plotted rather than assumed constant. Pooled over the twelve
+  paired runs, RBD leads by $+0.156 \pm 0.048$ (standard error), positive in $10$ of $12$.
+  Error bars are one standard deviation.}
+  \label{fig:identification}
+\end{figure}

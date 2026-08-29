@@ -95,7 +95,7 @@ fig, axes = plt.subplots(1, 2, figsize=(5.4, 2.6), sharey=True,
 for ax, series, xlim, lab in [
         (axes[0], [(wbar, BLUE, "o", True), (resid, RED, "^", False)],
          (-0.085, 0.095), r"(a) $\bar{w}$ and its residual"),
-        (axes[1], [(head, GREY, "s", True)], (-0.60, 0.60), "(b) pretrained head")]:
+        (axes[1], [(head, GREY, "s", True)], (-0.60, 0.60), r"(b) pretrained head   (axis is 6$\times$ wider)")]:
     ax.axvspan(-TAU, TAU, color="0.90", lw=0, zorder=0)
     ax.axvline(0, color="0.65", lw=0.5, zorder=1)
     for vals, col, mk, filled in series:
@@ -104,6 +104,8 @@ for ax, series, xlim, lab in [
     ax.set_xlim(*xlim); ax.set_ylim(-0.7, len(cname) - 0.3)
     ax.set_xlabel("cosine with concept vector")
     panel_label(ax, lab)
+# A shaded band marking (a)'s range was tried here and competed with the null band,
+# which is the same grey. The scale change is called out in the panel label instead.
 axes[0].set_yticks(y); axes[0].set_yticklabels(cname)
 axes[0].tick_params(axis="y", length=0)
 fig.legend(handles=[Line2D([], [], color=BLUE, marker="o", ms=3.2, ls="none", label=r"$\bar{w}$"),
@@ -146,9 +148,9 @@ split_10k = sym([0.8613,0.8625,0.8669,0.8627,
                  0.8643,0.8601,
                  0.8646], 5)
 
-panels = [(seed_1500, "(a) 10 seeds, 1{,}500 iters", 0.8223),
-          (seed_10k,  "(b) 10 seeds, 10{,}000 iters", 0.9999),
-          (split_10k, "(c) 5 splits, 10{,}000 iters", 0.8649)]
+panels = [(seed_1500, "(a) 10 seeds, 1{,}500 iters", 0.8223, "seed"),
+          (seed_10k,  "(b) 10 seeds, 10{,}000 iters", 0.9999, "seed"),
+          (split_10k, "(c) 5 splits, 10{,}000 iters", 0.8649, "split")]
 fig, axes = plt.subplots(1, 3, figsize=(5.4, 2.0))
 # Perceptually uniform single hue, light -> dark: the sequential rule, without
 # the pure black that "Greys" hits at the top of the range. Truncated at 0.88 so
@@ -156,27 +158,67 @@ fig, axes = plt.subplots(1, 3, figsize=(5.4, 2.0))
 _mako = sns.color_palette("mako_r", as_cmap=True)
 cmap = LinearSegmentedColormap.from_list("mako_trunc", _mako(np.linspace(0.0, 0.88, 256)))
 cmap.set_bad("white")
-for ax, (M, title, mean) in zip(axes, panels):
+for ax, (M, title, mean, factor) in zip(axes, panels):
     # aspect="auto" so all three axes are the same height and the titles line up;
     # cell size then differs between the 10x10 and the 5x5, which is harmless.
     im = ax.imshow(M, cmap=cmap, vmin=0.6, vmax=1.0, interpolation="nearest",
                    aspect="auto")
     ax.set_title(f"{title.replace('{,}', ',')}\nmean {mean:.4f}", fontsize=7,
                  pad=3, linespacing=1.35)
-    n = M.shape[0]
-    ax.set_xticks(range(n)); ax.set_yticks(range(n))
-    ax.set_xticklabels(range(n), fontsize=5.5); ax.set_yticklabels(range(n), fontsize=5.5)
+    # Run indices were set at 5.5pt, below the print floor, and nothing in the text
+    # refers to an individual cell -- the matrix shape already reads at a glance.
+    ax.set_xticks([]); ax.set_yticks([])
     ax.minorticks_off()                      # the science style adds minor ticks
     ax.tick_params(length=0)
+    # name what actually differs between runs: (a) and (b) vary the seed, (c) the
+    # train/test split. "run" alone leaves the reader guessing which.
+    ax.set_xlabel(factor, fontsize=7, labelpad=2)
+    ax.set_ylabel(factor, fontsize=7, labelpad=2)
     for sp in ax.spines.values():
         sp.set_linewidth(0.4)
 fig.tight_layout(w_pad=1.0, rect=(0, 0, 0.90, 1))
 cax = fig.add_axes([0.925, 0.16, 0.016, 0.60])
 cb = fig.colorbar(im, cax=cax, ticks=[0.6, 0.7, 0.8, 0.9, 1.0])
-cb.set_label("pairwise cosine", fontsize=7)
+cb.set_label(r"$\cos(v_{\mathrm{pop}}, v_{\mathrm{pop}}')$ between two runs", fontsize=7)
 cb.ax.tick_params(labelsize=6.5, length=1.5, width=0.4)
 cb.ax.minorticks_off()
 cb.outline.set_linewidth(0.4)
 save(fig, "fig_stability")
 
 print("wrote fig_rank_panels, fig_concepts, fig_stability")
+
+
+# ------------------------------------------------------------------ identification
+# tab:synth-ident. Two accuracy requirements drive the design:
+#   1. x is the measured separation itself, on a true numeric scale. The three conditions
+#      are unequally spaced (0.599, 0.446, 0.349), so plotting them at equal intervals
+#      would distort the shape of both curves -- and the shape is the claim.
+#   2. chance is 1/N and N differs per condition (51, 22, 11), so it is drawn as its own
+#      series. It is fixed by the design, not measured, so it gets markers and no line.
+sep    = [0.599, 0.446, 0.349]
+nuser  = [51, 22, 11]
+chance = [1/51, 1/22, 1/11]
+lore, lore_e = [0.284, 0.387, 0.432], [0.022, 0.068, 0.039]
+rbd,  rbd_e  = [0.446, 0.647, 0.477], [0.052, 0.049, 0.207]
+
+fig, ax = plt.subplots(figsize=(3.4, 2.35))
+ax.errorbar(sep, lore, yerr=lore_e, color=BLUE, marker="o", ms=3.2, mfc="none", mew=0.9,
+            lw=1.0, ls="--", capsize=1.8, elinewidth=0.6, label="LoRe", zorder=3)
+ax.errorbar(sep, rbd, yerr=rbd_e, color=RED, marker="s", ms=3.2, lw=1.0, ls="-",
+            capsize=1.8, elinewidth=0.6, label="RBD", zorder=3)
+ax.plot(sep, chance, color=GREY, marker="^", ms=3.0, ls="none", label="chance ($1/N$)",
+        zorder=2)
+ax.invert_xaxis()                                  # smaller max|cos| = more separated
+# N goes in the tick label: as an annotation it collided with the chance markers
+ax.set_xticks(sep)
+ax.set_xticklabels([f"{v:.3f}\n$N{{=}}{n}$" for v, n in zip(sep, nuser)])
+ax.set_xlabel(r"planted separation, $\max|\cos|$   (more separated $\rightarrow$)")
+ax.set_ylabel("user-to-axis match")
+ax.set_ylim(0, 0.86)
+h, l = ax.get_legend_handles_labels()
+o = [l.index("LoRe"), l.index("RBD"), l.index("chance ($1/N$)")]
+ax.legend([h[i] for i in o], [l[i] for i in o], frameon=False, loc="upper left",
+          handlelength=1.8, labelspacing=0.3, borderpad=0.2)
+fig.tight_layout()
+save(fig, "fig_identification")
+print("wrote fig_identification")
