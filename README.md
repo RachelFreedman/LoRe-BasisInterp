@@ -222,15 +222,3 @@ See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 ## License
 CC-BY-NC 4.0 licensed, as found in the LICENSE file.
 
-## Cite Us
-If you use this codebase, please cite us:
-```bibtex
-@misc{bose2025lorepersonalizingllmslowrank,
-      title={LoRe: Personalizing LLMs via Low-Rank Reward Modeling}, 
-      author={Avinandan Bose and Zhihan Xiong and Yuejie Chi and Simon Shaolei Du and Lin Xiao and Maryam Fazel},
-      year={2025},
-      eprint={2504.14439},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2504.14439}, 
-}
