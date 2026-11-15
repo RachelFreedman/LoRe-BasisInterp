@@ -74,7 +74,7 @@ axes[0].legend(handles=[Line2D([], [], color=BLUE, ls="--", marker="o", ms=2.8,
                                mfc="none", mew=0.9, lw=1.0, label="LoRe"),
                         Line2D([], [], color=RED, ls="-", marker="s", ms=2.8,
                                lw=1.0, label="RBD")],
-               loc="center left", bbox_to_anchor=(0.03, 0.56), frameon=False,
+               loc="lower right", bbox_to_anchor=(0.86, 0.17), frameon=False,
                handlelength=2.0, labelspacing=0.3)
 fig.tight_layout(w_pad=1.4)
 save(fig, "fig_rank_panels")
